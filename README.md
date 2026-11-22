@@ -16,8 +16,11 @@ No install and no server: open the HTML files in Chrome or Edge. Fonts and three
 Double-click `hex-path-composer.html`. In **Output**, Export SVG asks once for a folder (the browser
 remembers it; **Choose folder** changes it). Each press then creates
 `<folder>/<date>_<cols>x<rows>_seed<seed>/` (`_2`, `_3` … when the name is taken) with `hex_paths.svg`,
-`layout.svg` and `config.json`; Save all adds `tiles.csv` and `hex_tiles.dxf`. Browsers without folder
-access (Firefox, Safari) download the same files with the folder name as a prefix.
+`layout.svg` and `config.json`; Save all adds `tiles.csv` and `hex_tiles.dxf`.
+
+Browsers forbid folder pickers inside a cross-origin frame (the claude.ai artifact viewer, the Claude
+desktop preview), and Firefox and Safari have no folder access. There the same folder is saved as one
+`<date>_<cols>x<rows>_seed<seed>.zip` instead (through the viewer's save prompt when embedded).
 
 ```bash
 python make_hex_tiles.py <output folder>   # tile sets; default ./exports/tile_sets (git-ignored)

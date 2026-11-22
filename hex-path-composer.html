@@ -42,6 +42,7 @@ section{display:flex;flex-direction:column;gap:10px;padding-top:16px;border-top:
 .seg label:has(input:focus-visible){outline:2px solid var(--opp);outline-offset:-3px}
 .btn{all:unset;cursor:pointer;border:1px solid var(--rule);border-radius:6px;padding:7px 12px;font-weight:600;font-size:13px;background:var(--bg)}
 .btn:hover{border-color:var(--ink)}
+.btn[hidden]{display:none}
 .btn.primary{background:var(--ink);color:var(--panel);border-color:var(--ink);padding:10px 16px;font-size:14px}
 .btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--opp);outline-offset:2px}
 .num-in{font:inherit;font-family:var(--f-mono);width:64px;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--bg);color:var(--ink)}
@@ -662,10 +663,37 @@ function exportConfig() {
     .replace(/\{\s+("col"[^{}]*?)\s+\}/g, (_, body) => '{' + body.replace(/\s*\n\s*/g, ' ') + '}');
 }
 
-// Saving: the page writes straight into a folder on this computer (File System Access API, Chrome and Edge).
-// The folder is chosen once and remembered in IndexedDB; every press creates a new date_gridsize_seed
-// subfolder (_2, _3 … when the name is taken). Browsers without the API download the files instead.
+// Saving: opened directly in Chrome or Edge, the page writes into a folder on this computer (File System
+// Access API). The folder is chosen once and remembered in IndexedDB; every press creates a new
+// date_gridsize_seed subfolder (_2, _3 … when the name is taken). Browsers forbid folder pickers inside a
+// cross-origin frame (the claude.ai artifact viewer, the desktop app's preview), so there, and in browsers
+// without the API, the same folder is saved as one .zip instead.
+const EMBEDDED = (() => { try { return window.top !== window; } catch { return true; } })();
+const downloadsCap = window.claude && window.claude.use ? window.claude.use('downloads') : Promise.resolve(null);
 let exportDir = null;
+// Minimal ZIP writer (stored, no compression): a whole export folder as one file
+const CRC_TABLE = Array.from({length: 256}, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+const crc32 = b => { let c = ~0; for (let i = 0; i < b.length; i++) c = CRC_TABLE[(c ^ b[i]) & 255] ^ (c >>> 8); return ~c >>> 0; };
+function zipFolder(dir, files) {
+  const enc = new TextEncoder(), d = new Date(), out = [], central = [];
+  const time = d.getHours() << 11 | d.getMinutes() << 5 | d.getSeconds() >> 1;
+  const date = (d.getFullYear() - 1980) << 9 | (d.getMonth() + 1) << 5 | d.getDate();
+  let offset = 0;
+  const header = (size, fill) => { const b = new Uint8Array(size), v = new DataView(b.buffer); fill(v); return b; };
+  for (const [file, text] of Object.entries(files)) {
+    const name = enc.encode(`${dir}/${file}`), data = enc.encode(text), crc = crc32(data);
+    const common = (v, at) => { v.setUint16(at, 20, true); v.setUint16(at + 2, 0x0800, true); v.setUint16(at + 4, 0, true);
+      v.setUint16(at + 6, time, true); v.setUint16(at + 8, date, true); v.setUint32(at + 10, crc, true);
+      v.setUint32(at + 14, data.length, true); v.setUint32(at + 18, data.length, true); v.setUint16(at + 22, name.length, true); };
+    out.push(header(30, v => { v.setUint32(0, 0x04034b50, true); common(v, 4); }), name, data);
+    central.push(header(46, v => { v.setUint32(0, 0x02014b50, true); v.setUint16(4, 20, true); common(v, 6); v.setUint32(42, offset, true); }), name);
+    offset += 30 + name.length + data.length;
+  }
+  const size = central.reduce((s, b) => s + b.length, 0), n = Object.keys(files).length;
+  const end = header(22, v => { v.setUint32(0, 0x06054b50, true); v.setUint16(8, n, true); v.setUint16(10, n, true);
+    v.setUint32(12, size, true); v.setUint32(16, offset, true); });
+  return new Blob([...out, ...central, end], {type: 'application/zip'});
+}
 const idb = (mode, fn) => new Promise((ok, fail) => {
   const open = indexedDB.open('hexComposer', 1);
   open.onupgradeneeded = () => open.result.createObjectStore('kv');
@@ -695,28 +723,29 @@ async function writeFolder(files) {
     return `${exportDir.name}/${name}/`;
   }
 }
-function downloadFiles(files) {
-  for (const [file, text] of Object.entries(files)) {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([text], {type: file.endsWith('.svg') ? 'image/svg+xml' : 'text/plain'}));
-    a.download = `${folderName()}_${file}`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  }
-}
 async function saveExport(all) {
   const toast = document.getElementById('toast'), svgText = exportSVG();
   if (!svgText) { toast.textContent = 'Assign tiles first; there are no paths to save yet.'; return; }
   const files = {'hex_paths.svg': svgText, 'layout.svg': exportLayoutSVG(), 'config.json': exportConfig()};
   if (all) Object.assign(files, {'tiles.csv': exportCSV(), 'hex_tiles.dxf': exportDXF()});
-  if (window.showDirectoryPicker) {
+  if (!EMBEDDED && window.showDirectoryPicker) {
     try { toast.textContent = `Saved ${await writeFolder(files)}`; return; }
     catch (e) {
       if (e.name === 'AbortError') { toast.textContent = 'No folder chosen, nothing saved.'; return; }
       if (e.name !== 'SecurityError') { toast.textContent = `Couldn't save: ${e.message}`; return; }
-    }   // a SecurityError means this page may not open folders (e.g. embedded); download instead
+    }
   }
-  if (window.top !== window) { copyText(svgText, 'SVG'); return; }   // embedded pages can't download either
-  downloadFiles(files);
-  toast.textContent = `Downloaded ${Object.keys(files).length} files named ${folderName()}_…`;
+  const zip = zipFolder(folderName(), files), filename = `${folderName()}.zip`;
+  if (EMBEDDED) {   // the frame can't download by itself; the viewer's save prompt can
+    const downloads = await downloadsCap;
+    if (!downloads) { copyText(svgText, 'SVG'); return; }
+    try { await downloads.save({filename, data: zip}); toast.textContent = `Saved ${filename}`; }
+    catch (e) { toast.textContent = e.code === 'declined' ? 'Save declined, nothing saved.' : `Couldn't save: ${e.message}`; }
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(zip); a.download = filename; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast.textContent = `Downloaded ${filename}`;
 }
 function exportDXF() {
   const out = ['0','SECTION','2','ENTITIES'], f = x => x.toFixed(4), ent = (...kv) => out.push(...kv.map(String));
@@ -848,7 +877,8 @@ document.getElementById('exportSvg').onclick = () => saveExport(false);
 document.getElementById('saveAll').onclick = () => saveExport(true);
 document.getElementById('pickFolder').onclick = () => pickFolder().catch(e => {
   if (e.name !== 'AbortError') document.getElementById('toast').textContent = `Couldn't open a folder here: ${e.message}`; });
-loadFolder().then(showFolder);
+document.getElementById('pickFolder').hidden = EMBEDDED || !window.showDirectoryPicker;
+if (!EMBEDDED) loadFolder().then(showFolder);
 document.getElementById('cDxf').onclick = () => copyText(exportDXF(), 'DXF');
 document.getElementById('cCsv').onclick = () => copyText(exportCSV(), 'CSV');
 
