@@ -1,0 +1,812 @@
+<meta charset="utf-8">
+<title>Hex Path Composer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: drafting-desk tool — a sidebar of four numbered steps beside a full-height board */
+:root{
+  --bg:#e9ece6; --panel:#f6f7f3; --ink:#1c2420; --muted:#5d6a63; --rule:#cfd5cc;
+  --tile:#d5dacf; --tile-edge:#8e9a90; --stage:#e1e5dd; --off:#e7eae3; --warn:#b3261e;
+  --adj:#0f7a6c; --skip:#b0610e; --opp:#4a3fc2;
+  --f-display:"Chivo", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111513; --panel:#171c19; --ink:#e3e9e4; --muted:#8f9c94; --rule:#2a322d;
+  --tile:#2f3832; --tile-edge:#5d6c62; --stage:#141917; --off:#191e1b; --warn:#ff8a80;
+  --adj:#3cc9b4; --skip:#f0a04b; --opp:#9b92ff; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111513; --panel:#171c19; --ink:#e3e9e4; --muted:#8f9c94; --rule:#2a322d;
+  --tile:#2f3832; --tile-edge:#5d6c62; --stage:#141917; --off:#191e1b; --warn:#ff8a80;
+  --adj:#3cc9b4; --skip:#f0a04b; --opp:#9b92ff; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-display);font-size:14px}
+.app{display:grid;grid-template-columns:320px 1fr;height:100%;min-height:0}
+aside{background:var(--panel);border-right:1px solid var(--rule);overflow-y:auto;
+  padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:20px;
+  display:flex;flex-direction:column;gap:18px}
+h1{font-size:20px;font-weight:800;letter-spacing:-.01em;margin:0}
+section{display:flex;flex-direction:column;gap:10px;padding-top:16px;border-top:1px solid var(--rule)}
+.grp{display:flex;flex-direction:column;gap:10px}
+.grp[hidden]{display:none}
+.lbl{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);margin:0;display:flex;align-items:center;gap:8px}
+.lbl b{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--ink);color:var(--panel);font-size:10px;letter-spacing:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.chk{display:flex;gap:6px;align-items:center;margin-right:10px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.seg label{text-align:center;padding:8px 0;cursor:pointer;font-weight:600;font-size:13px;background:var(--bg);position:relative}
+.seg label + label{border-left:1px solid var(--rule)}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg label:has(input:checked){background:var(--ink);color:var(--panel)}
+.seg label:has(input:focus-visible){outline:2px solid var(--opp);outline-offset:-3px}
+.btn{all:unset;cursor:pointer;border:1px solid var(--rule);border-radius:6px;padding:7px 12px;font-weight:600;font-size:13px;background:var(--bg)}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--ink);color:var(--panel);border-color:var(--ink);padding:10px 16px;font-size:14px}
+.btn:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--opp);outline-offset:2px}
+.num-in{font:inherit;font-family:var(--f-mono);width:64px;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--bg);color:var(--ink)}
+.open{fill:var(--stage);stroke:var(--ink);stroke-width:1.4;pointer-events:none}
+select{font:inherit;padding:6px 8px;border:1px solid var(--rule);border-radius:6px;background:var(--bg);color:var(--ink);width:100%}
+.stats{font-family:var(--f-mono);font-size:12px;line-height:1.7;margin:0;color:var(--muted);font-variant-numeric:tabular-nums}
+.stats span{color:var(--ink)}
+.stats .warn{color:var(--warn)}
+.stats:empty{display:none}
+.stage{position:relative;min-width:0;min-height:0;background:var(--stage);overflow:hidden;display:grid}
+#board{width:100%;height:100%;display:block;touch-action:none;user-select:none}
+.hx{stroke:var(--tile-edge);stroke-width:1;fill:var(--off);cursor:pointer;opacity:.55}
+.hx.on{fill:var(--tile);opacity:1}
+.hx.iso{fill:url(#hatch);opacity:1}
+.hx:hover{stroke:var(--ink);stroke-width:2}
+.ln{fill:none;stroke-width:3.4;stroke-linecap:round;pointer-events:none}
+.ln.k1{stroke:var(--adj)} .ln.k2{stroke:var(--skip)} .ln.k3{stroke:var(--opp)}
+.end{fill:var(--ink);pointer-events:none}
+.num{font-family:var(--f-mono);font-weight:600;font-size:17px;fill:var(--ink);paint-order:stroke;stroke:var(--tile);stroke-width:5px;
+  text-anchor:middle;dominant-baseline:central;pointer-events:none}
+#tip{position:absolute;pointer-events:none;font-family:var(--f-mono);font-size:12px;color:var(--ink);background:var(--panel);
+  border:1px solid var(--rule);border-radius:6px;padding:6px 9px;max-width:260px;line-height:1.5;box-shadow:0 4px 14px rgb(0 0 0 / .12)}
+#banner{position:absolute;left:50%;top:12px;transform:translateX(-50%);font-family:var(--f-mono);font-size:12px;background:var(--panel);
+  border:1px solid var(--rule);border-radius:6px;padding:6px 10px;color:var(--ink)}
+#copyout{width:100%;height:90px;font-family:var(--f-mono);font-size:11px;background:var(--bg);color:var(--ink);border:1px solid var(--rule);border-radius:6px}
+.toast{font-family:var(--f-mono);font-size:12px;color:var(--adj);margin:0;overflow-wrap:anywhere}
+.toast:empty{display:none}
+.ln.art{stroke-width:1;vector-effect:non-scaling-stroke}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px}
+.grid2 label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+.grid2 .num-in{width:auto}
+.grid2 input[type=range]{width:100%;accent-color:var(--opp);margin:6px 0 0}
+#mapper,#artPreview{width:100%;display:block;background:var(--bg);border:1px solid var(--rule);border-radius:6px}
+#mapper{aspect-ratio:1;touch-action:none}
+#artPreview{aspect-ratio:1.15}
+.mg{fill:none;stroke:var(--rule);stroke-width:1;vector-effect:non-scaling-stroke}
+.mc{fill:none;stroke:var(--ink);stroke-width:2;vector-effect:non-scaling-stroke}
+.mhl{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3;vector-effect:non-scaling-stroke}
+.mh{fill:var(--panel);stroke:var(--ink);stroke-width:1.5;vector-effect:non-scaling-stroke;cursor:grab}
+.mh:hover,.mh.drag{fill:var(--opp)}
+.ms{stroke:var(--opp);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.msd{fill:var(--opp)}
+@media (max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto auto;height:auto}
+  .stage{order:-1;height:auto;aspect-ratio:1/1.1;max-width:100%}
+  aside{border-right:0;border-top:1px solid var(--rule);overflow:visible;padding-right:max(16px,env(safe-area-inset-right,0px))}
+}
+</style>
+
+<div class="app">
+  <aside>
+    <h1>Hex Path Composer</h1>
+
+    <section>
+      <p class="lbl"><b>1</b>Layout</p>
+      <div class="row">
+        <input type="number" id="cols" min="1" max="60" value="15" aria-label="Columns" class="num-in">
+        <span>×</span>
+        <input type="number" id="rows" min="1" max="60" value="15" aria-label="Rows" class="num-in">
+        <button class="btn" id="applySize">Set grid</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="randomLayout">Random</button>
+        <button class="btn" id="clearAll">Clear</button>
+      </div>
+      <select id="density" aria-label="Lines inside each tile">
+        <option value="any">Any connected lines</option>
+        <option value="few">Fewest lines</option>
+        <option value="loop">Up to one line per end</option>
+        <option value="most">Every line</option>
+      </select>
+      <div class="row">
+        <label class="chk"><input type="checkbox" id="openEnds" checked>Open ends</label>
+        <label class="chk"><input type="checkbox" id="showNums" checked>Numbers</label>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="assign">Assign tiles</button>
+        <input type="number" id="seed" class="num-in" style="width:96px" min="0" max="999999" aria-label="Seed">
+        <button class="btn" id="rerun" aria-label="Re-run this seed" title="Re-run this seed">↻</button>
+      </div>
+      <p class="stats" id="stats"></p>
+    </section>
+
+    <section>
+      <p class="lbl"><b>2</b>Linetype</p>
+      <div class="seg" role="radiogroup" aria-label="Linetype">
+        <label><input type="radio" name="linetype" value="single">Single</label>
+        <label><input type="radio" name="linetype" value="offsets">Offset</label>
+        <label><input type="radio" name="linetype" value="spiral">Spiral</label>
+      </div>
+    </section>
+
+    <section>
+      <p class="lbl"><b>3</b>Line parameters</p>
+      <div class="grid2">
+        <label>Line width (mm)<input type="number" id="lineW" class="num-in" min="0.05" max="5" step="0.05"></label>
+      </div>
+      <div id="offCtl" class="grp">
+        <div class="grid2">
+          <label>Copies / side<input type="number" id="offCount" class="num-in" min="0" max="40" step="1"></label>
+          <label>Gap graph<select id="curvePreset">
+            <option value="ease-in">Ease in</option>
+            <option value="ease-out">Ease out</option>
+            <option value="linear">Linear</option>
+            <option value="s-curve">S-curve</option>
+            <option value="swell">Swell</option>
+            <option value="flat">Even</option>
+            <option value="custom" hidden>Custom</option>
+          </select></label>
+          <label>Gap at y 0 (mm)<input type="number" id="gapMin" class="num-in" min="0" max="20" step="0.1"></label>
+          <label>Gap at y 1 (mm)<input type="number" id="gapMax" class="num-in" min="0" max="20" step="0.1"></label>
+        </div>
+        <svg id="mapper" viewBox="-0.07 -0.07 1.14 1.14" aria-label="Gap graph: x is the copy number, y is its gap"></svg>
+      </div>
+      <div id="spCtl" class="grp" hidden>
+        <div class="grid2">
+          <label>Radius (mm)<input type="number" id="spRadius" class="num-in" min="0.5" max="27" step="0.5"></label>
+          <label>Turns / 100 mm<input type="number" id="spTurns" class="num-in" min="0.2" max="60" step="0.5"></label>
+          <label>Section sides<input type="number" id="spSides" class="num-in" min="3" max="12" step="1"></label>
+          <label>Polygon → circle<input type="range" id="spRound" min="0" max="1" step="0.05"></label>
+          <label>Tilt: swing → full<input type="range" id="spTilt" min="0" max="90" step="1"></label>
+          <label>Loose ↔ dense<input type="range" id="spVary" min="0" max="1" step="0.05"></label>
+          <label>Drift length (mm)<input type="number" id="spFeature" class="num-in" min="5" max="200" step="1"></label>
+          <label>Open-end shrink (mm)<input type="number" id="spTaper" class="num-in" min="0" max="40" step="0.5"></label>
+        </div>
+        <div class="row"><button class="btn" id="spShuffle">Shuffle loose ↔ dense</button></div>
+      </div>
+      <svg id="artPreview" aria-label="One tile at true line width"></svg>
+      <p class="stats" id="artStats"></p>
+    </section>
+
+    <section>
+      <p class="lbl"><b>4</b>Output · 1:1 mm</p>
+      <div class="row">
+        <button class="btn primary" id="exportSvg">Export SVG</button>
+        <button class="btn" id="saveFolder" hidden>Save all</button>
+        <button class="btn" id="cDxf">Copy DXF</button>
+        <button class="btn" id="cCsv">Copy CSV</button>
+      </div>
+      <p class="toast" id="toast" aria-live="polite"></p>
+      <textarea id="copyout" hidden readonly aria-label="Export text"></textarea>
+    </section>
+  </aside>
+
+  <div class="stage" id="stage">
+    <svg id="board" aria-label="Hexagon board">
+      <defs>
+        <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="8" height="8" fill="var(--tile)"></rect><line x1="0" y1="0" x2="0" y2="8" stroke="var(--warn)" stroke-width="2"></line>
+        </pattern>
+      </defs>
+      <g id="gHex"></g><g id="gLines"></g><g id="gEnds"></g><g id="gNums"></g>
+    </svg>
+    <div id="banner" hidden></div>
+    <div id="tip" hidden></div>
+  </div>
+</div>
+
+<script>
+// ---------- geometry (mm, flat-top hexagon; edge n = 1..6 counted CCW from the upper-right edge) ----------
+const R = 55, A = R * Math.sqrt(3) / 2;
+const rad = d => d * Math.PI / 180;
+const mid = k => [A * Math.cos(rad(30 + 60 * k)), A * Math.sin(rad(30 + 60 * k))];
+const edgeDir = k => [Math.cos(rad(120 + 60 * k)), Math.sin(rad(120 + 60 * k))];
+const kindOf = (i, j) => Math.min(Math.abs(i - j), 6 - Math.abs(i - j));
+function pathGeom(i, j) {
+  const P = mid(i), Q = mid(j), d1 = edgeDir(i), d2 = edgeDir(j);
+  const den = d1[0] * d2[1] - d1[1] * d2[0], kind = kindOf(i, j);
+  if (Math.abs(den) < 1e-9) return {kind, line: [P, Q], pts: [P, Q]};
+  const t = ((Q[0] - P[0]) * d2[1] - (Q[1] - P[1]) * d2[0]) / den;
+  const C = [P[0] + t * d1[0], P[1] + t * d1[1]], r = Math.hypot(P[0] - C[0], P[1] - C[1]);
+  const a1 = Math.atan2(P[1] - C[1], P[0] - C[0]);
+  let s = Math.atan2(Q[1] - C[1], Q[0] - C[0]) - a1;
+  while (s > Math.PI) s -= 2 * Math.PI;
+  while (s <= -Math.PI) s += 2 * Math.PI;
+  const pts = [];
+  for (let n = 0; n <= 32; n++) { const a = a1 + s * n / 32; pts.push([C[0] + r * Math.cos(a), C[1] + r * Math.sin(a)]); }
+  return {kind, arc: {C, r, a1, s}, pts};
+}
+
+// ---------- artistic offsets: parallel copies of every path on both sides ----------
+// Gaps come from a Grasshopper-style graph mapper with a cubic Bezier: x_i = n evenly spaced values 0..1
+// (one per copy), y_i = Bezier(x_i), gap_i = gap min + y_i × (gap max − gap min). Copy k sits at
+// gap_1 + … + gap_k from the path. Arcs stay concentric (radius r ± d) and lines stay parallel, so every
+// copy still meets both edges at 90° and lands at mid ± d on the edge, where the neighbour's copies arrive.
+const maxOffset = () => R / 2 - art.width / 2;   // further out a copy would run past the tile corner
+const f2 = x => +x.toFixed(3);
+const ART_PRESETS = {
+  'ease-in':  {y0: 0, p1: [0.45, 0], p2: [0.85, 0.35], y3: 1},
+  'ease-out': {y0: 0, p1: [0.15, 0.65], p2: [0.55, 1], y3: 1},
+  linear:     {y0: 0, p1: [1/3, 1/3], p2: [2/3, 2/3], y3: 1},
+  's-curve':  {y0: 0, p1: [0.55, 0], p2: [0.45, 1], y3: 1},
+  swell:      {y0: 0, p1: [0.15, 1], p2: [0.85, 1], y3: 0},
+  flat:       {y0: 0.5, p1: [1/3, 0.5], p2: [2/3, 0.5], y3: 0.5},
+};
+const SP_DEFAULT = {radius: 7, turns: 7, sides: 4, round: 0, tilt: 40, vary: 0.6, feature: 30, taper: 8, seed: 1};
+const ART_DEFAULT = {style: 'single', width: 0.5, count: 8, gapMin: 0.8, gapMax: 2.6, preset: 'ease-in', curve: structuredClone(ART_PRESETS['ease-in']), sp: {...SP_DEFAULT}};
+let art = structuredClone(ART_DEFAULT);
+const bez = (a, b, c, d, t) => { const u = 1 - t; return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d; };
+// y for a given x: find t where the curve's x matches (bisection), then evaluate y there
+function curveY(x, cv = art.curve) {
+  let lo = 0, hi = 1;
+  for (let n = 0; n < 40; n++) { const m = (lo + hi) / 2; if (bez(0, cv.p1[0], cv.p2[0], 1, m) < x) lo = m; else hi = m; }
+  return bez(cv.y0, cv.p1[1], cv.p2[1], cv.y3, (lo + hi) / 2);
+}
+function artOffsets() {
+  const n = art.count, xs = Array.from({length: n}, (_, i) => n > 1 ? i / (n - 1) : 0);
+  const ys = xs.map(x => curveY(x)), gaps = ys.map(y => art.gapMin + y * (art.gapMax - art.gapMin));
+  let d = 0; const all = gaps.map(g => d += g), offsets = all.filter(v => v <= maxOffset());
+  return {xs, ys, gaps, all, offsets, dropped: all.length - offsets.length};
+}
+// Every drawn line of path i–j in tile coordinates (y up): the path itself, then ± each offset
+function pathCopies(i, j, offs) {
+  const g = pathGeom(i, j);
+  return [0, ...offs.flatMap(d => [d, -d])].map(d => {
+    if (g.line) { const [P, Q] = g.line, L = Math.hypot(Q[0] - P[0], Q[1] - P[1]), nx = -(Q[1] - P[1]) / L, ny = (Q[0] - P[0]) / L;
+      return {kind: g.kind, d, line: true, P: [P[0] + d * nx, P[1] + d * ny], Q: [Q[0] + d * nx, Q[1] + d * ny]}; }
+    const {C, r, a1, s} = g.arc, rr = r + d;
+    return {kind: g.kind, d, arc: {C, r: rr, a1, s},
+      P: [C[0] + rr * Math.cos(a1), C[1] + rr * Math.sin(a1)], Q: [C[0] + rr * Math.cos(a1 + s), C[1] + rr * Math.sin(a1 + s)]};
+  });
+}
+// SVG path data for one copy; at(x, y) maps tile coordinates to an "x y" string with y flipped,
+// so a counter-clockwise arc (s > 0) becomes sweep-flag 0
+const segD = (c, at) => c.line ? `M${at(...c.P)} L${at(...c.Q)}`
+  : `M${at(...c.P)} A${f2(c.arc.r)} ${f2(c.arc.r)} 0 0 ${c.arc.s > 0 ? 0 : 1} ${at(...c.Q)}`;
+// ---------- spiral style: a coil around each path ----------
+// The path is the axis. A point circles it through a cross-section whose radial function ρ(φ) runs from a
+// regular polygon (round = 0) to a circle (round = 1). The section plane is tilted by α about the in-plane
+// normal N, so seen from above the offset from the axis point c(s) is
+//   a · e(s) · ρ(φ) · [cos φ · sin α · T + sin φ · N]
+// α = 0 gives a side-to-side swing, α = 90° the whole section. e(s) tapers to 0 at both ends, so every coil
+// starts and ends on the edge midpoint and meets its neighbour. φ(s) = ∫ω ds, where the turn rate
+// ω = ω0 · 4^(vary · n(s)) and n(s) is smooth random noise (knots every "variation length", joined with
+// smootherstep), so loose and dense stretches blend into each other.
+const smoother = t => t * t * t * (t * (6 * t - 15) + 10);
+function sectionR(phi, n, round) {
+  const w = 2 * Math.PI / n, m = ((phi % w) + w) % w - w / 2;
+  return Math.cos(Math.PI / n) / Math.cos(m) * (1 - round) + round;
+}
+// Arc-length parameterisation of path i–j: at(s) gives the axis point and its unit tangent
+function axisOf(i, j) {
+  const g = pathGeom(i, j);
+  if (g.line) { const [P, Q] = g.line, L = Math.hypot(Q[0] - P[0], Q[1] - P[1]), u = [(Q[0] - P[0]) / L, (Q[1] - P[1]) / L];
+    return {L, at: s => [[P[0] + s * u[0], P[1] + s * u[1]], u]}; }
+  const {C, r, a1, s} = g.arc, sg = Math.sign(s);
+  return {L: r * Math.abs(s), at: d => { const t = a1 + sg * d / r;
+    return [[C[0] + r * Math.cos(t), C[1] + r * Math.sin(t)], [-sg * Math.sin(t), sg * Math.cos(t)]]; }};
+}
+// Each path of each tile gets its own loose/dense pattern, fixed by the spiral seed
+const pathRand = (tile, bit) => mulberry32(Math.imul(art.sp.seed + 1, 1000003) + tile * 15 + bit);
+// A random value in 0..1 tied to a point on the board, so both tiles on an edge read the same number
+const hashUnit = (sd, x, y) => mulberry32(Math.imul(Math.round(x * 100), 73856093) ^ Math.imul(Math.round(y * 100), 19349663) ^ Math.imul(sd + 7, 83492791))();
+// Joining coils between tiles: at a shared edge every coil arrives at the same phase, φ = ±90°, where the
+// offset lies along the edge: midpoint + a·ρ(90°)·E, with E a direction along the edge that both tiles agree
+// on (edgeDir of edge k mod 3). The sign of φ follows the path's own N, so a coil leaving the edge and one
+// arriving at it both land on that point. The turn rate also matches there: the noise knots at a path's
+// two ends belong to the edges. To make the phase come out right, the rate is scaled by 1 + c·sin²(πs/L),
+// which leaves both ends untouched. Open ends taper to the midpoint instead.
+function spiralPts(a, b, rand, tile = -1, open = 0) {
+  const sp = art.sp, {L, at} = axisOf(a, b), [cx, cy] = tile >= 0 ? centre[tile] : [0, 0];
+  const openA = open >> a & 1, openB = open >> b & 1;
+  const K = Math.max(1, Math.round(L / sp.feature)), h = L / K;
+  const edgeNoise = e => { const [mx, my] = mid(e); return hashUnit(sp.seed, cx + mx, cy + my) * 2 - 1; };
+  const knots = Array.from({length: K + 1}, (_, k) => k === 0 ? edgeNoise(a) : k === K ? edgeNoise(b) : rand() * 2 - 1);
+  const noise = s => { const x = Math.min(K, Math.max(0, s / h)), k = Math.min(K - 1, Math.floor(x));
+    return knots[k] + (knots[k + 1] - knots[k]) * smoother(x - k); };
+  const w0 = 2 * Math.PI * sp.turns / 100, rate = s => w0 * Math.pow(4, sp.vary * noise(s));
+  const bump = s => Math.sin(Math.PI * s / L) ** 2;
+  // pass 1: sample positions and the phase each step adds (midpoint rule)
+  const S = [0], dRaw = [], dBump = [], perTurn = Math.max(64, sp.sides * 14);
+  for (let s = 0; s < L - 1e-9;) {
+    const ds = Math.min(0.5, 2 * Math.PI / (rate(s) * perTurn), L - s), m = s + ds / 2, w = rate(m) * ds;
+    dRaw.push(w); dBump.push(w * bump(m)); s += ds; S.push(s);
+  }
+  const raw = dRaw.reduce((p, q) => p + q, 0), B = dBump.reduce((p, q) => p + q, 0);
+  const lock = (s, e) => { const T = at(s)[1], E = edgeDir(e % 3); return -T[1] * E[0] + T[0] * E[1] > 0 ? Math.PI / 2 : -Math.PI / 2; };
+  let phi0 = 0, c = 0;
+  if (!openA && !openB) {   // pick the whole number of half-turns nearest the natural count
+    const p0 = lock(0, a), p1 = lock(L, b), base = p1 - p0;
+    let m = Math.round((raw - base) / (2 * Math.PI)), total = () => base + 2 * Math.PI * m;
+    while (total() < 0.7 * raw || total() <= 0) m++;   // keeps the rate positive everywhere
+    phi0 = p0; c = (total() - raw) / B;
+  } else if (!openA) phi0 = lock(0, a);
+  else if (!openB) phi0 = lock(L, b) - raw;
+  const ease = t => sp.taper > 0 ? smoother(Math.min(1, Math.max(0, t / sp.taper))) : 1;
+  const sa = Math.sin(rad(sp.tilt)), pts = [];
+  // pass 2: place the points
+  S.forEach((s, n) => {
+    const phi = n ? (phi0 += dRaw[n - 1] + c * dBump[n - 1]) : phi0;
+    const env = (openA ? ease(s) : 1) * (openB ? ease(L - s) : 1);
+    const [p, T] = at(s), k = sp.radius * env * sectionR(phi, sp.sides, sp.round);
+    const u = Math.cos(phi) * sa * k, v = Math.sin(phi) * k;   // along T and along N = T turned 90°
+    pts.push([p[0] + u * T[0] - v * T[1], p[1] + u * T[1] + v * T[0]]);
+  });
+  return pts;
+}
+const polyD = (pts, at) => 'M' + pts.map(p => at(...p)).join('L');
+const localAt = (x, y) => `${x.toFixed(2)} ${(-y).toFixed(2)}`;
+
+const offs = () => art.style === 'offsets' ? ART.offsets : [];   // offset distances the current linetype draws
+let ART = null;   // current offsets plus each line's on-screen path data, rebuilt when the settings change
+function refreshArt() {
+  const o = artOffsets(), local = (x, y) => `${f2(x)} ${f2(-y)}`;
+  ART = {...o, d: PAIRS.map(([i, j]) => pathCopies(i, j, o.offsets).map(c => segD(c, local)).join(' '))};
+}
+
+// ---------- line sets: 15 possible lines = bits of a mask (1-2, 1-3 … 5-6) ----------
+const PAIRS = [];
+for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) PAIRS.push([i, j]);
+const pairIdx = (i, j) => PAIRS.findIndex(p => p[0] === Math.min(i, j) && p[1] === Math.max(i, j));
+const popcount = m => { let c = 0; while (m) { c += m & 1; m >>= 1; } return c; };
+const SYMS = [];
+for (let r = 0; r < 6; r++) for (const f of [1, -1])
+  SYMS.push(PAIRS.map(([i, j]) => pairIdx(((f * i + r) % 6 + 6) % 6, ((f * j + r) % 6 + 6) % 6)));
+const mapMask = (m, s) => { let o = 0; for (let b = 0; b < 15; b++) if (m >> b & 1) o |= 1 << s[b]; return o; };
+const canonOf = m => Math.min(...SYMS.map(s => mapMask(m, s)));
+
+// CONN[edgeMask] = every connected line set whose ends are exactly those edges
+const CONN = Array.from({length: 64}, () => []);
+for (let m = 1; m < 1 << 15; m++) {
+  const ps = PAIRS.filter((_, b) => m >> b & 1);
+  let verts = 0; ps.forEach(([i, j]) => verts |= 1 << i | 1 << j);
+  let seen = 1 << ps[0][0], grew = true;
+  while (grew) { grew = false; ps.forEach(([i, j]) => { const e = 1 << i | 1 << j;
+    if ((seen & e) && (seen & e) !== e) { seen |= e; grew = true; } }); }
+  if (seen === verts) CONN[verts].push(m);
+}
+// Shape IDs match the Hex Path Tiles sets and CSV files (3E-0001 …)
+const SHAPE_ID = new Map();
+for (let k = 3; k <= 6; k++) {
+  const list = [];
+  CONN.forEach((ms, v) => { if (popcount(v) === k) ms.forEach(m => { if (canonOf(m) === m) list.push(m); }); });
+  list.sort((a, b) => popcount(a) - popcount(b) || a - b);
+  list.forEach((m, n) => SHAPE_ID.set(m, `${k}E-${String(n + 1).padStart(4, '0')}`));
+}
+const KIND_NAME = {1: 'adjacent', 2: 'skip one', 3: 'opposite'};
+const shapeName = m => popcount(m) === 1 ? `single path, ${KIND_NAME[kindOf(...PAIRS[Math.log2(m)])]}` : SHAPE_ID.get(canonOf(m));
+
+// ---------- board ----------
+let COLS = 15, ROWS = 15, N = 0, centre = [], nbr = [], hexEls = [];
+let lit = new Uint8Array(0), result = null, stale = false;
+// Seeded randomness: the same seed and layout always give the same numbers and paths.
+let seed = 0, rng = Math.random;
+const mulberry32 = a => () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+const newSeed = () => Math.floor(Math.random() * 1e6);
+const rint = (a, b) => a + Math.floor(rng() * (b - a + 1));
+const pick = arr => arr[Math.floor(rng() * arr.length)];
+const shuffled = arr => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+const posKey = (x, y) => Math.round(x / (1.5 * R)) + ',' + Math.round(y / A);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// ---------- drawing setup ----------
+const svg = document.getElementById('board'), NS = 'http://www.w3.org/2000/svg';
+const gHex = document.getElementById('gHex'), gLines = document.getElementById('gLines'),
+      gEnds = document.getElementById('gEnds'), gNums = document.getElementById('gNums');
+const el = (tag, attrs) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+const hexPts = [0,1,2,3,4,5].map(k => `${(R * Math.cos(rad(60 * k))).toFixed(2)},${(-R * Math.sin(rad(60 * k))).toFixed(2)}`).join(' ');
+const LINE_D = PAIRS.map(([i, j]) => 'M' + pathGeom(i, j).pts.map(([x, y]) => `${x.toFixed(2)} ${(-y).toFixed(2)}`).join('L'));
+
+// Rebuild the cols × rows board; keep lit tiles that still fit when resizing.
+function buildBoard(cols, rows, keep) {
+  const old = lit, oldCols = COLS, oldRows = ROWS;
+  COLS = cols; ROWS = rows; N = cols * rows;
+  centre = [];
+  for (let row = 0; row < rows; row++) for (let col = 0; col < cols; col++)
+    centre.push([col * 1.5 * R, -(row * 2 * A + (col % 2) * A)]);
+  const at = new Map(centre.map((c, i) => [posKey(...c), i]));
+  nbr = centre.map(([x, y]) => [0,1,2,3,4,5].map(e => {
+    const [mx, my] = mid(e), j = at.get(posKey(x + 2 * mx, y + 2 * my)); return j === undefined ? -1 : j; }));
+  lit = new Uint8Array(N);
+  if (keep) for (let row = 0; row < Math.min(rows, oldRows); row++) for (let col = 0; col < Math.min(cols, oldCols); col++)
+    lit[row * cols + col] = old[row * oldCols + col] || 0;
+  const xs = centre.map(c => c[0]), ys = centre.map(c => -c[1]), pad = 8;
+  svg.setAttribute('viewBox', `${Math.min(...xs) - R - pad} ${Math.min(...ys) - A - pad} ${Math.max(...xs) - Math.min(...xs) + 2 * R + 2 * pad} ${Math.max(...ys) - Math.min(...ys) + 2 * A + 2 * pad}`);
+  gHex.replaceChildren();
+  hexEls = centre.map(([x, y], i) => { const p = el('polygon', {points: hexPts, transform: `translate(${x} ${-y})`, class: 'hx', 'data-i': i}); gHex.appendChild(p); return p; });
+  document.getElementById('cols').value = cols; document.getElementById('rows').value = rows;
+  result = null; stale = false;
+}
+
+// ---------- placement ----------
+// 1. Every lit tile takes part. With open ends off, tiles need two lit neighbours that can also host paths
+//    (the 2-core of the lit layout). 2. Each gets a random number 2..min(6, usable edges).
+// 3. Choose which edges carry a path so every tile has exactly its number: an edge shared by two lit tiles
+//    is used by both or neither; an edge facing an empty cell or the border may hold an open end.
+//    (Random-walk repair; numbers that cannot be met are re-drawn.) 4. Fill each tile with a random
+//    connected line set on its path edges.
+function assign(useSeed) {
+  seed = useSeed ?? newSeed(); rng = mulberry32(seed);
+  document.getElementById('seed').value = seed;
+  const useOpen = document.getElementById('openEnds').checked;
+  const core = new Set(); for (let i = 0; i < N; i++) if (lit[i]) core.add(i);
+  if (!useOpen) {
+    const count = i => nbr[i].filter(j => j >= 0 && core.has(j)).length;
+    for (let changed = true; changed;) { changed = false; for (const i of [...core]) if (count(i) < 2) { core.delete(i); changed = true; } }
+  }
+  const isolated = [...Array(N).keys()].filter(i => lit[i] && !core.has(i));
+
+  const edges = [], inc = new Map([...core].map(i => [i, []]));
+  core.forEach(i => nbr[i].forEach((j, e) => {
+    if (j >= 0 && core.has(j)) { if (j > i) { inc.get(i).push(edges.length); inc.get(j).push(edges.length); edges.push({a: i, ea: e, b: j}); } }
+    else if (useOpen && (j < 0 || !lit[j])) { inc.get(i).push(edges.length); edges.push({a: i, ea: e, b: -1}); }
+  }));
+  const other = (id, i) => edges[id].a === i ? edges[id].b : edges[id].a;
+  const target = new Map(), deg = new Map(), on = new Uint8Array(edges.length);
+  core.forEach(i => { target.set(i, rint(2, Math.min(6, inc.get(i).length))); deg.set(i, 0); });
+  const flip = id => { const d = (on[id] ^= 1) ? 1 : -1, {a, b} = edges[id];
+    deg.set(a, deg.get(a) + d); if (b >= 0) deg.set(b, deg.get(b) + d); };
+  const ids = [...edges.keys()];
+  // shared edges first so neighbouring tiles link up; open ends top up what is left
+  [...shuffled(ids.filter(id => edges[id].b >= 0)), ...shuffled(ids.filter(id => edges[id].b < 0))].forEach(id => {
+    const {a, b} = edges[id]; if (deg.get(a) < target.get(a) && (b < 0 || deg.get(b) < target.get(b))) flip(id); });
+
+  const coreList = [...core];
+  let redrawn = 0, solved = coreList.length === 0;
+  for (let round = 0; round < 80 && !solved; round++) {
+    for (let step = 0; step < 3000; step++) {
+      const bad = coreList.filter(i => deg.get(i) !== target.get(i));
+      if (!bad.length) { solved = true; break; }
+      const i = pick(bad), need = deg.get(i) < target.get(i);
+      const cand = inc.get(i).filter(id => on[id] === (need ? 0 : 1));
+      const good = cand.filter(id => { const j = other(id, i); return j < 0 || (need ? deg.get(j) < target.get(j) : deg.get(j) > target.get(j)); });
+      const pool = good.length && rng() > .1 ? good : cand;
+      if (pool.length) flip(pick(pool));
+    }
+    if (!solved) coreList.forEach(i => { if (deg.get(i) !== target.get(i)) { target.set(i, rint(2, Math.min(6, inc.get(i).length))); redrawn++; } });
+  }
+  if (!solved) {  // last resort: keep the layout, make every tile's number its real path count
+    coreList.forEach(i => { for (const id of inc.get(i)) { if (deg.get(i) >= 2) break; if (!on[id]) flip(id); } });
+    coreList.forEach(i => target.set(i, deg.get(i)));
+  }
+
+  const density = document.getElementById('density').value, tiles = new Map();
+  coreList.forEach(i => {
+    let ends = 0, open = 0;
+    inc.get(i).forEach(id => { if (!on[id]) return;
+      const e = edges[id].a === i ? edges[id].ea : (edges[id].ea + 3) % 6;
+      ends |= 1 << e; if (edges[id].b < 0) open |= 1 << e; });
+    const k = popcount(ends), all = CONN[ends];
+    const pool = density === 'few' ? all.filter(m => popcount(m) === k - 1)
+      : density === 'loop' ? all.filter(m => popcount(m) <= k)
+      : density === 'most' ? all.filter(m => popcount(m) === k * (k - 1) / 2) : all;
+    tiles.set(i, {k, ends, open, lines: pick(pool)});
+  });
+  result = {tiles, isolated, redrawn, exact: solved};
+  stale = false; render();
+}
+
+// ---------- drawing ----------
+function render() {
+  const iso = new Set(result && !stale ? result.isolated : []);
+  hexEls.forEach((p, i) => p.setAttribute('class', 'hx' + (lit[i] ? ' on' : '') + (iso.has(i) ? ' iso' : '')));
+  gLines.replaceChildren(); gEnds.replaceChildren(); gNums.replaceChildren();
+  const showNums = document.getElementById('showNums').checked;
+  if (result && !stale) result.tiles.forEach(({k, ends, open, lines}, i) => {
+    const [x, y] = centre[i], tr = `translate(${x} ${-y})`;
+    // with offsets, every line is drawn 1 px wide so the gradient of gaps stays readable
+    const spiral = art.style === 'spiral', many = spiral || offs().length > 0;
+    PAIRS.forEach(([a, b], bit) => { if (lines >> bit & 1) gLines.appendChild(el('path',
+      {d: spiral ? polyD(spiralPts(a, b, pathRand(i, bit), i, open), localAt) : many ? ART.d[bit] : LINE_D[bit],
+       transform: tr, class: 'ln k' + kindOf(a, b) + (many ? ' art' : '')})); });
+    for (let e = 0; e < 6; e++) if (ends >> e & 1) { const [mx, my] = mid(e), o = open >> e & 1;
+      gEnds.appendChild(el('circle', {cx: x + mx, cy: -(y + my), r: o ? 3.2 : 2.4, class: o ? 'open' : 'end'})); }
+    if (showNums) { const t = el('text', {x, y: -y, class: 'num'}); t.textContent = k; gNums.appendChild(t); }
+  });
+  const banner = document.getElementById('banner');
+  const anyLit = lit.some(Boolean);
+  banner.hidden = anyLit && !stale && result;
+  banner.textContent = !anyLit ? 'Right-click or drag to light tiles' : 'Layout changed · Assign tiles';
+  stats(); save();
+}
+function stats() {
+  const nLit = lit.reduce((a, b) => a + b, 0), r = result && !stale ? result : null, out = [];
+  if (r) {
+    const openEnds = [...r.tiles.values()].reduce((s, t) => s + popcount(t.open), 0);
+    out.push(`<span>${r.tiles.size}</span> of ${nLit} placed · <span>${openEnds}</span> open ends`);
+    if (r.isolated.length) out.push(`<span class="warn">${r.isolated.length} can't connect (hatched)</span>`);
+    if (!r.exact) out.push(`<span class="warn">Numbers set from the closest fit</span>`);
+  }
+  document.getElementById('stats').innerHTML = out.join('<br>');
+}
+
+// ---------- input: right-click (or right-drag) toggles, touch tap toggles ----------
+let paint = null;
+const tileAt = e => { const t = document.elementFromPoint(e.clientX, e.clientY); return t && t.dataset && t.dataset.i !== undefined ? +t.dataset.i : -1; };
+function setTile(i, v) { if (i < 0 || lit[i] === v) return; lit[i] = v; if (result) stale = true; render(); }
+svg.addEventListener('contextmenu', e => e.preventDefault());
+svg.addEventListener('pointerdown', e => {
+  const i = tileAt(e); if (i < 0) return;
+  if (e.button === 2 || e.pointerType === 'touch') { paint = {v: lit[i] ? 0 : 1, touch: e.pointerType === 'touch'}; setTile(i, paint.v); e.preventDefault(); }
+});
+svg.addEventListener('pointermove', e => {
+  if (paint && !paint.touch) setTile(tileAt(e), paint.v);
+  showTip(e);
+});
+addEventListener('pointerup', () => paint = null);
+svg.addEventListener('pointerleave', () => tip.hidden = true);
+
+const tip = document.getElementById('tip'), stage = document.getElementById('stage');
+const edgeList = m => [0,1,2,3,4,5].filter(e => m >> e & 1).map(e => e + 1).join(' ');
+function showTip(e) {
+  const i = tileAt(e);
+  if (i < 0 || e.pointerType === 'touch') { tip.hidden = true; return; }
+  const col = i % COLS + 1, row = Math.floor(i / COLS) + 1, t = result && !stale ? result.tiles.get(i) : null;
+  let html = `<b>Col ${col}, Row ${row}</b> · ${lit[i] ? 'lit' : 'off'}`;
+  if (t) html += `<br>Number ${t.k} · edges ${edgeList(t.ends)}` + (t.open ? ` · open ${edgeList(t.open)}` : '') +
+    `<br>${popcount(t.lines)} line${popcount(t.lines) > 1 ? 's' : ''}: ${PAIRS.filter((_, b) => t.lines >> b & 1).map(([a, b]) => `${a+1}–${b+1}`).join(' ')}` +
+    `<br>Shape ${shapeName(t.lines)}`;
+  else if (result && !stale && result.isolated.includes(i)) html += '<br>Needs 2 lit neighbours that can take paths';
+  tip.innerHTML = html; tip.hidden = false;
+  const rect = stage.getBoundingClientRect();
+  tip.style.left = Math.min(e.clientX - rect.left + 14, rect.width - tip.offsetWidth - 8) + 'px';
+  tip.style.top = Math.min(e.clientY - rect.top + 14, rect.height - tip.offsetHeight - 8) + 'px';
+}
+
+// ---------- layouts ----------
+function randomLayout() {
+  const s = newSeed(); rng = mulberry32(s);
+  lit = new Uint8Array(N);
+  const xs = centre.map(c => c[0]), ys = centre.map(c => c[1]);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2, sc = Math.min(COLS, ROWS) / 15;
+  centre.forEach(([x, y], i) => { const d = Math.hypot(x - cx, y - cy) / (2 * A); lit[i] = rng() < (d < 4 * sc ? .95 : d < 6.5 * sc ? .6 : .12) ? 1 : 0; });
+  result = null; stale = false; assign(s);
+}
+function save() { try { localStorage.setItem('hexComposer.v2', JSON.stringify({cols: COLS, rows: ROWS, seed, lit: Array.from(lit).join(''), art})); } catch {} }
+function load() {
+  try { const s = JSON.parse(localStorage.getItem('hexComposer.v2'));
+    if (s && s.art && s.art.curve) art = {...structuredClone(ART_DEFAULT), ...s.art, sp: {...SP_DEFAULT, ...s.art.sp}};
+    if (s && s.lit.length === s.cols * s.rows) { buildBoard(s.cols, s.rows, false); lit = Uint8Array.from(s.lit, Number); seed = s.seed; return lit.some(Boolean); } } catch {}
+  return false;
+}
+
+// ---------- export ----------
+const KIND_ID = {1: 'adjacent-edges', 2: 'skip-one-edge', 3: 'opposite-edges'}, KIND_VAR = {1: '--adj', 2: '--skip', 3: '--opp'};
+// Exports are 1:1 — 1 SVG unit = 1 mm. The document is the whole grid with its origin at the grid's
+// top-left corner, so a tile lands in the same place in every export of that grid size.
+function frame() {
+  const xs = centre.map(c => c[0]), ys = centre.map(c => -c[1]);
+  const x0 = Math.min(...xs) - R, y0 = Math.min(...ys) - A;
+  return {x0, y0, w: f2(Math.max(...xs) + R - x0), h: f2(Math.max(...ys) + A - y0), at: (x, y) => `${f2(x - x0)} ${f2(-y - y0)}`};
+}
+function pathGroups(fr) {
+  const groups = {1: [], 2: [], 3: []};
+  result.tiles.forEach((t, i) => {
+    const [cx, cy] = centre[i];
+    PAIRS.forEach(([a, b], bit) => { if (!(t.lines >> bit & 1)) return;
+      const world = (x, y) => fr.at(cx + x, cy + y);
+      if (art.style === 'spiral') groups[kindOf(a, b)].push(`<path d="${polyD(spiralPts(a, b, pathRand(i, bit), i, t.open), world)}"/>`);
+      else pathCopies(a, b, offs()).forEach(c => groups[c.kind].push(`<path d="${segD(c, world)}"/>`));
+    });
+  });
+  return [1, 2, 3].filter(k => groups[k].length).map(k =>
+    `<g id="${KIND_ID[k]}" fill="none" stroke="${css(KIND_VAR[k])}" stroke-width="${art.width}" stroke-linecap="round" stroke-linejoin="round">\n${groups[k].join('\n')}\n</g>`);
+}
+const svgHead = (fr, title) => [`<?xml version="1.0" encoding="UTF-8"?>`,
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${fr.w}mm" height="${fr.h}mm" viewBox="0 0 ${fr.w} ${fr.h}">`,
+  `<title>${title} ${folderName()}</title>`,
+  `<desc>Hexagon tiles R ${R} mm, ${COLS} x ${ROWS} grid, seed ${seed}. Scale 1:1, 1 unit = 1 mm. Path width ${art.width} mm.${offs().length
+    ? ` ${ART.offsets.length} offset copies per side at ${ART.offsets.map(f2).join(', ')} mm.` : ''}${art.style === 'spiral'
+    ? ` Spiral: radius ${art.sp.radius} mm, ${art.sp.turns} turns per 100 mm, ${art.sp.sides}-sided section, roundness ${art.sp.round}, tilt ${art.sp.tilt} deg, spiral seed ${art.sp.seed}.` : ''}</desc>`];
+// Paths only
+function exportSVG() {
+  if (!result || stale || !result.tiles.size) return null;
+  const fr = frame();
+  return [...svgHead(fr, 'Hex paths'), ...pathGroups(fr), `</svg>`].join('\n');
+}
+// The whole board as laid out: every cell outline, lit tiles shaded, paths, open ends and numbers
+function exportLayoutSVG() {
+  if (!result || stale) return null;
+  const fr = frame(), hex = ([cx, cy]) => [0,1,2,3,4,5].map(k => fr.at(cx + R * Math.cos(rad(60 * k)), cy + R * Math.sin(rad(60 * k))).replace(' ', ',')).join(' ');
+  const cells = centre.map((c, i) => `<polygon points="${hex(c)}"${lit[i] ? ' class="lit"' : ''}/>`);
+  const opens = [], nums = [];
+  result.tiles.forEach((t, i) => {
+    const [cx, cy] = centre[i];
+    for (let e = 0; e < 6; e++) if (t.open >> e & 1) { const [mx, my] = mid(e), [x, y] = fr.at(cx + mx, cy + my).split(' ');
+      opens.push(`<circle cx="${x}" cy="${y}" r="2"/>`); }
+    const [x, y] = fr.at(cx, cy).split(' ');
+    nums.push(`<text x="${x}" y="${y}">${t.k}</text>`);
+  });
+  return [...svgHead(fr, 'Hex layout'),
+    `<g id="cells" fill="none" stroke="#9aa59c" stroke-width="0.3">`, `<style>.lit{fill:#e3e7df}</style>`, ...cells, `</g>`,
+    ...pathGroups(fr),
+    `<g id="open-ends" fill="#ffffff" stroke="#1c2420" stroke-width="0.3">`, ...opens, `</g>`,
+    `<g id="numbers" font-family="Consolas, monospace" font-size="12" text-anchor="middle" dominant-baseline="central" fill="#1c2420">`, ...nums, `</g>`,
+    `</svg>`].join('\n');
+}
+const pad2 = n => String(n).padStart(2, '0');
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; };
+const folderName = () => `${today()}_${COLS}x${ROWS}_seed${seed}`;
+// Everything needed to rebuild or audit this export: settings, lit cells and what each tile received
+function exportConfig() {
+  const litCells = []; for (let i = 0; i < N; i++) if (lit[i]) litCells.push([i % COLS + 1, Math.floor(i / COLS) + 1]);
+  const tiles = [...result.tiles].map(([i, t]) => ({col: i % COLS + 1, row: Math.floor(i / COLS) + 1, number: t.k,
+    edges: edgeList(t.ends), open_ends: edgeList(t.open), lines: PAIRS.filter((_, b) => t.lines >> b & 1).map(([a, b]) => `${a+1}-${b+1}`).join(' '),
+    shape: shapeName(t.lines)}));
+  const d = new Date();
+  const cfg = {created: `${today()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`,
+    grid: {cols: COLS, rows: ROWS}, seed, tile_radius_mm: R, path_width_mm: art.width,
+    open_ends: document.getElementById('openEnds').checked, lines_per_tile: document.getElementById('density').value,
+    edge_numbering: '1-6 counter-clockwise from the upper-right edge (flat-top hexagon)',
+    style: art.style,
+    ...(art.style === 'spiral' ? {spiral: {radius_mm: art.sp.radius, turns_per_100mm: art.sp.turns, section_sides: art.sp.sides,
+      polygon_to_circle: art.sp.round, tilt_deg: art.sp.tilt, loose_dense: art.sp.vary, variation_length_mm: art.sp.feature,
+      end_taper_mm: art.sp.taper, spiral_seed: art.sp.seed,
+      rule: 'offset from axis = radius * shrink(s) * section(phi) * [cos(phi) * sin(tilt) * T + sin(phi) * N]; phi = integral of w ds; w = 2*pi*turns/100 * 4^(loose_dense * smooth_noise(s)) * (1 + c*sin^2(pi*s/L)); at shared edges phi = +-90 deg and the noise value comes from the edge, so coils join; shrink applies only at open ends'}} : {}),
+    ...(art.style === 'offsets' ? {offsets: {copies_per_side: art.count, copies_drawn_per_side: ART.offsets.length, gap_at_y0_mm: art.gapMin, gap_at_y1_mm: art.gapMax,
+      graph: art.preset, bezier: {p0: [0, f2(art.curve.y0)], p1: art.curve.p1.map(f2), p2: art.curve.p2.map(f2), p3: [1, f2(art.curve.y3)]},
+      x: ART.xs.map(f2), y: ART.ys.map(f2), gaps_mm: ART.gaps.map(f2), offsets_mm: ART.offsets.map(f2),
+      rule: 'gap_i = gap_at_y0 + y_i * (gap_at_y1 - gap_at_y0); copy k sits at gap_1 + ... + gap_k on both sides; copies past the tile corner are left out'}} : {}),
+    lit_count: litCells.length, placed_count: tiles.length, lit: litCells, tiles};
+  // one cell or tile per line keeps the file readable
+  return JSON.stringify(cfg, null, 2).replace(/\[\s+(-?[\d.]+(?:,\s+-?[\d.]+)*)\s+\]/g, (_, body) => '[' + body.split(/,\s+/).join(', ') + ']')
+    .replace(/\{\s+("col"[^{}]*?)\s+\}/g, (_, body) => '{' + body.replace(/\s*\n\s*/g, ' ') + '}');
+}
+
+// Saving works when the page is served by serve_composer.py on this computer. Every press creates a new
+// subfolder (the helper adds _2, _3 … when the date_gridsize_seed name is already taken).
+const HELPER = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+async function saveFolder(svgOnly) {
+  const toast = document.getElementById('toast'), svgText = exportSVG();
+  if (!svgText) { toast.textContent = 'Press Assign tiles first; there are no paths to save yet.'; return; }
+  const files = {'hex_paths.svg': svgText, 'layout.svg': exportLayoutSVG(), 'config.json': exportConfig()};
+  if (!svgOnly) Object.assign(files, {'tiles.csv': exportCSV(), 'hex_tiles.dxf': exportDXF()});
+  try {
+    const r = await fetch('/save', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({folder: folderName(), files})});
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    toast.textContent = `Created ${j.path} with ${Object.keys(files).join(', ')}`;
+  } catch (e) { toast.textContent = `Couldn't save: ${e.message}. Check that serve_composer.py is still running.`; }
+}
+function exportDXF() {
+  const out = ['0','SECTION','2','ENTITIES'], f = x => x.toFixed(4), ent = (...kv) => out.push(...kv.map(String));
+  const layer = {1: 'PATH_ADJ', 2: 'PATH_SKIP', 3: 'PATH_OPP'};
+  for (let i = 0; i < N; i++) if (lit[i]) {
+    const [cx, cy] = centre[i];
+    for (let k = 0; k < 6; k++) { const a = rad(60*k), b = rad(60*(k+1));
+      ent('0','LINE','8','HEX','10',f(cx+R*Math.cos(a)),'20',f(cy+R*Math.sin(a)),'30','0','11',f(cx+R*Math.cos(b)),'21',f(cy+R*Math.sin(b)),'31','0'); }
+    const t = result && !stale && result.tiles.get(i); if (!t) continue;
+    PAIRS.forEach(([a, b], bit) => { if (!(t.lines >> bit & 1)) return;
+      if (art.style === 'spiral') {   // one lightweight polyline per coil
+        const pts = spiralPts(a, b, pathRand(i, bit), i, t.open);
+        ent('0','LWPOLYLINE','8',layer[kindOf(a, b)],'90',pts.length,'70','0');
+        pts.forEach(([x, y]) => ent('10', f(cx + x), '20', f(cy + y)));
+        return;
+      }
+      pathCopies(a, b, offs()).forEach(g => {
+        if (g.line) ent('0','LINE','8',layer[g.kind],'10',f(cx+g.P[0]),'20',f(cy+g.P[1]),'30','0','11',f(cx+g.Q[0]),'21',f(cy+g.Q[1]),'31','0');
+        else { const {C, r, a1, s} = g.arc, d = x => ((x * 180 / Math.PI) % 360 + 360) % 360, st = s > 0 ? a1 : a1 + s, en = s > 0 ? a1 + s : a1;
+          ent('0','ARC','8',layer[g.kind],'10',f(cx+C[0]),'20',f(cy+C[1]),'30','0','40',f(r),'50',f(d(st)),'51',f(d(en))); } }); });
+    ent('0','TEXT','8','LABEL','10',f(cx),'20',f(cy),'30','0','40','10','1',t.k,'72','1','73','2','11',f(cx),'21',f(cy),'31','0');
+  }
+  out.push('0','ENDSEC','0','EOF'); return out.join('\n');
+}
+function exportCSV() {
+  const rows = ['col,row,x_mm,y_mm,number,edges,open_ends,lines,shape'];
+  if (result && !stale) result.tiles.forEach((t, i) => rows.push([i % COLS + 1, Math.floor(i / COLS) + 1, centre[i][0].toFixed(2), centre[i][1].toFixed(2), t.k,
+    edgeList(t.ends), edgeList(t.open),
+    PAIRS.filter((_, b) => t.lines >> b & 1).map(([a, b]) => `${a+1}-${b+1}`).join(' '), shapeName(t.lines)].join(',')));
+  return rows.join('\n');
+}
+async function copyText(txt, what) {
+  const toast = document.getElementById('toast'), ta = document.getElementById('copyout');
+  if (!txt) { toast.textContent = 'Press Assign tiles first; there are no paths to export yet.'; return; }
+  try { await navigator.clipboard.writeText(txt); ta.hidden = true; toast.textContent = `${what} copied. Paste into a text file to save it.`; }
+  catch { ta.hidden = false; ta.value = txt; ta.focus(); ta.select(); toast.textContent = `Clipboard blocked. ${what} text is selected below; press Ctrl+C.`; }
+}
+
+// ---------- graph mapper editor and one-tile preview ----------
+const mapper = document.getElementById('mapper'), artPreview = document.getElementById('artPreview');
+const MY = y => 1 - y;   // graph y points up
+let dragH = -1, renderQueued = 0;
+const handles = () => { const c = art.curve; return [[0, c.y0], c.p1, c.p2, [1, c.y3]]; };
+function drawMapper() {
+  const H = handles(), c = art.curve, pts = [];
+  for (let n = 0; n <= 64; n++) { const t = n / 64; pts.push(`${f2(bez(0, c.p1[0], c.p2[0], 1, t))} ${f2(MY(bez(c.y0, c.p1[1], c.p2[1], c.y3, t)))}`); }
+  const kids = [el('rect', {x: 0, y: 0, width: 1, height: 1, class: 'mg'})];
+  [0.25, 0.5, 0.75].forEach(v => kids.push(el('line', {x1: v, y1: 0, x2: v, y2: 1, class: 'mg'}), el('line', {x1: 0, y1: v, x2: 1, y2: v, class: 'mg'})));
+  // one stem per copy: x_i along the bottom, y_i where it meets the curve
+  ART.xs.forEach((x, n) => { const y = MY(ART.ys[n]), out = n >= ART.offsets.length;
+    kids.push(el('line', {x1: x, y1: 1, x2: x, y2: y, class: 'ms', opacity: out ? .3 : 1}), el('circle', {cx: x, cy: y, r: .014, class: 'msd', opacity: out ? .3 : 1})); });
+  kids.push(el('path', {d: 'M' + pts.join('L'), class: 'mc'}),
+    el('line', {x1: H[0][0], y1: MY(H[0][1]), x2: H[1][0], y2: MY(H[1][1]), class: 'mhl'}),
+    el('line', {x1: H[3][0], y1: MY(H[3][1]), x2: H[2][0], y2: MY(H[2][1]), class: 'mhl'}));
+  H.forEach(([x, y], h) => kids.push(el('circle', {cx: x, cy: MY(y), r: .03, class: 'mh' + (h === dragH ? ' drag' : ''), 'data-h': h})));
+  mapper.replaceChildren(...kids);
+}
+// A sample tile (lines 1–2, 3–5, 3–6: one of each curve type) at the true line width
+function drawPreview() {
+  artPreview.setAttribute('viewBox', `${-R - 3} ${-A - 3} ${2 * R + 6} ${2 * A + 6}`);
+  const kids = [el('polygon', {points: hexPts, fill: 'var(--tile)', stroke: 'var(--tile-edge)', 'stroke-width': .4})];
+  [[0, 1], [2, 4], [2, 5]].forEach(([i, j]) => { const bit = pairIdx(i, j);
+    kids.push(el('path', {d: art.style === 'spiral' ? polyD(spiralPts(i, j, pathRand(0, bit)), localAt) : art.style === 'offsets' ? ART.d[bit] : LINE_D[bit],
+      fill: 'none', stroke: `var(${KIND_VAR[kindOf(i, j)]})`, 'stroke-width': art.width, 'stroke-linecap': 'round', 'stroke-linejoin': 'round'})); });
+  artPreview.replaceChildren(...kids);
+}
+// Only what needs attention: parameters that break the drawing
+function artStats() {
+  const out = [], o = ART, n = o.offsets.length, sp = art.sp;
+  if (art.style === 'offsets') {
+    if (o.dropped) out.push(`${o.dropped} cop${o.dropped > 1 ? 'ies' : 'y'} / side past the tile corner, left out`);
+    if (n && Math.min(...o.gaps.slice(0, n)) < art.width) out.push('Gaps under the line width, lines touch');
+  }
+  if (art.style === 'spiral' && sp.radius > R / 2) out.push(`Radius over ${R / 2} mm crosses the tile corner`);
+  document.getElementById('artStats').innerHTML = out.map(t => `<span class="warn">${t}</span>`).join('<br>');
+}
+function syncArtInputs() {
+  document.getElementById('offCount').value = art.count;
+  document.getElementById('gapMin').value = art.gapMin;
+  document.getElementById('gapMax').value = art.gapMax;
+  document.getElementById('curvePreset').value = art.preset;
+  document.querySelector(`input[name=linetype][value=${art.style}]`).checked = true;
+  document.getElementById('lineW').value = art.width;
+  for (const [id, [key]] of Object.entries(SP_INPUTS)) document.getElementById(id).value = art.sp[key];
+}
+// input id → [spiral setting, min, max, whole numbers only]
+const SP_INPUTS = {spRadius: ['radius', 0.5, 27], spTurns: ['turns', 0.2, 60], spSides: ['sides', 3, 12, true],
+  spRound: ['round', 0, 1], spTilt: ['tilt', 0, 90, true], spVary: ['vary', 0, 1], spFeature: ['feature', 5, 200], spTaper: ['taper', 0, 40]};
+function artChanged() {
+  refreshArt(); document.getElementById('curvePreset').value = art.preset;
+  document.getElementById('offCtl').hidden = art.style !== 'offsets';
+  document.getElementById('spCtl').hidden = art.style !== 'spiral';
+  drawMapper(); drawPreview(); artStats();
+  renderQueued ||= requestAnimationFrame(() => { renderQueued = 0; render(); });
+}
+const graphPt = e => { const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(mapper.getScreenCTM().inverse());
+  return [f2(Math.max(0, Math.min(1, p.x))), f2(Math.max(0, Math.min(1, MY(p.y))))]; };
+mapper.addEventListener('pointerdown', e => { const h = e.target.dataset && e.target.dataset.h; if (h === undefined) return;
+  dragH = +h; mapper.setPointerCapture(e.pointerId); e.preventDefault(); drawMapper(); });
+mapper.addEventListener('pointermove', e => { if (dragH < 0) return;
+  const [x, y] = graphPt(e), c = art.curve;
+  if (dragH === 0) c.y0 = y; else if (dragH === 3) c.y3 = y; else c['p' + dragH] = [x, y];
+  art.preset = 'custom'; artChanged(); });
+mapper.addEventListener('lostpointercapture', () => { dragH = -1; drawMapper(); });
+const numIn = (id, lo, hi, now) => { const v = parseFloat(document.getElementById(id).value); return Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : now; };
+document.getElementById('offCount').oninput = () => { art.count = Math.round(numIn('offCount', 0, 40, art.count)); artChanged(); };
+document.getElementById('gapMin').oninput = () => { art.gapMin = numIn('gapMin', 0, 20, art.gapMin); artChanged(); };
+document.getElementById('gapMax').oninput = () => { art.gapMax = numIn('gapMax', 0, 20, art.gapMax); artChanged(); };
+document.getElementById('curvePreset').onchange = e => { art.preset = e.target.value; art.curve = structuredClone(ART_PRESETS[art.preset]); artChanged(); };
+document.querySelectorAll('input[name=linetype]').forEach(r => r.onchange = () => { art.style = r.value; artChanged(); });
+document.getElementById('lineW').oninput = () => { art.width = numIn('lineW', 0.05, 5, art.width); artChanged(); };
+for (const [id, [key, lo, hi, whole]] of Object.entries(SP_INPUTS))
+  document.getElementById(id).oninput = () => { const v = numIn(id, lo, hi, art.sp[key]); art.sp[key] = whole ? Math.round(v) : v; artChanged(); };
+document.getElementById('spShuffle').onclick = () => { art.sp.seed = newSeed(); artChanged(); };
+
+// ---------- wiring ----------
+document.getElementById('assign').onclick = () => assign();
+document.getElementById('rerun').onclick = () => assign(Math.max(0, Math.round(+document.getElementById('seed').value) || 0));
+document.getElementById('randomLayout').onclick = randomLayout;
+document.getElementById('clearAll').onclick = () => { lit = new Uint8Array(N); result = null; stale = false; render(); };
+document.getElementById('applySize').onclick = () => {
+  const clamp = v => Math.max(1, Math.min(60, Math.round(+v) || 1));
+  buildBoard(clamp(document.getElementById('cols').value), clamp(document.getElementById('rows').value), true); render();
+};
+document.getElementById('showNums').onchange = render;
+document.getElementById('density').onchange = () => { if (result && !stale) assign(seed); };
+document.getElementById('openEnds').onchange = () => { if (result && !stale) assign(seed); };
+document.getElementById('saveFolder').hidden = !HELPER;
+document.getElementById('saveFolder').onclick = () => saveFolder(false);
+document.getElementById('exportSvg').onclick = () => HELPER ? saveFolder(true) : copyText(exportSVG(), 'SVG');
+document.getElementById('cDxf').onclick = () => copyText(exportDXF(), 'DXF');
+document.getElementById('cCsv').onclick = () => copyText(exportCSV(), 'CSV');
+
+const restored = load();
+refreshArt(); syncArtInputs(); artChanged();
+if (restored) assign(seed); else { buildBoard(15, 15, false); randomLayout(); }
+</script>

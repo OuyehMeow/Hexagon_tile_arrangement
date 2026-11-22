@@ -1,0 +1,459 @@
+<title>Hex Path Tiles</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chivo:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: drafting-desk tool — a spec sidebar beside a full-height 3D viewport */
+:root{
+  --bg:#e9ece6; --panel:#f6f7f3; --ink:#1c2420; --muted:#5d6a63; --rule:#cfd5cc;
+  --tile:#d5dacf; --tile-edge:#8e9a90; --stage:#e1e5dd;
+  --adj:#0f7a6c; --skip:#b0610e; --opp:#4a3fc2; --accent:#1c2420;
+  --f-display:"Chivo", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111513; --panel:#171c19; --ink:#e3e9e4; --muted:#8f9c94; --rule:#2a322d;
+  --tile:#2b332e; --tile-edge:#56645b; --stage:#141917;
+  --adj:#3cc9b4; --skip:#f0a04b; --opp:#9b92ff; --accent:#e3e9e4; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111513; --panel:#171c19; --ink:#e3e9e4; --muted:#8f9c94; --rule:#2a322d;
+  --tile:#2b332e; --tile-edge:#56645b; --stage:#141917;
+  --adj:#3cc9b4; --skip:#f0a04b; --opp:#9b92ff; --accent:#e3e9e4; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-display);font-size:14px}
+.app{display:grid;grid-template-columns:330px 1fr;height:100%;min-height:0}
+aside{background:var(--panel);border-right:1px solid var(--rule);overflow-y:auto;
+  padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:20px;
+  display:flex;flex-direction:column;gap:22px}
+h1{font-size:22px;font-weight:800;letter-spacing:-.01em;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:6px 0 0;line-height:1.5}
+.lbl{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;padding:8px 10px;text-align:left;font-weight:600;font-size:13px;border-top:1px solid var(--rule)}
+.seg button:nth-child(-n+2){border-top:0}
+.seg button:nth-child(even){border-left:1px solid var(--rule)}
+.seg button small{display:block;font-family:var(--f-mono);font-weight:400;font-size:11px;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.seg button[aria-pressed="true"] small{color:var(--panel);opacity:.75}
+.seg button:focus-visible,.btn:focus-visible,.chip:focus-visible,input:focus-visible{outline:2px solid var(--opp);outline-offset:2px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{all:unset;cursor:pointer;border:1px solid var(--rule);border-radius:6px;padding:7px 12px;font-weight:600;font-size:13px;background:var(--bg)}
+.btn:hover,.chip:hover{border-color:var(--ink)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{all:unset;cursor:pointer;border:1px solid var(--rule);border-radius:4px;padding:3px 7px;font-family:var(--f-mono);font-size:12px;font-variant-numeric:tabular-nums;background:var(--bg)}
+.chip small{color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.chip[aria-pressed="true"] small{color:var(--panel);opacity:.75}
+input[type=range]{width:100%;accent-color:var(--ink)}
+.val{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.legend{display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:center}
+.types{display:flex;flex-direction:column;gap:10px}
+.type{display:grid;grid-template-columns:14px 1fr;gap:8px;align-items:start}
+.sw{width:14px;height:4px;border-radius:2px;margin-top:7px}
+.type b{font-weight:600}
+.type .val{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.spec{font-family:var(--f-mono);font-size:12px;color:var(--muted);line-height:1.7;margin:0}
+.spec span{color:var(--ink)}
+.stage{position:relative;min-width:0;min-height:0;background:var(--stage);overflow:hidden}
+canvas{display:block}
+#labels{position:absolute;inset:0;pointer-events:none}
+.tag{position:absolute;transform:translate(-50%,-50%);font-family:var(--f-mono);font-size:11px;font-weight:600;
+  color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:4px;padding:1px 5px;white-space:nowrap}
+#tip{position:absolute;pointer-events:none;font-family:var(--f-mono);font-size:12px;color:var(--ink);background:var(--panel);
+  border:1px solid var(--rule);border-radius:6px;padding:6px 9px;max-width:260px;line-height:1.5;box-shadow:0 4px 14px rgb(0 0 0 / .12)}
+#tip b{font-family:var(--f-display)}
+.hint{position:absolute;right:max(12px,env(safe-area-inset-right,0px));bottom:12px;font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+#copyout{width:100%;height:90px;font-family:var(--f-mono);font-size:11px;background:var(--bg);color:var(--ink);border:1px solid var(--rule);border-radius:6px}
+.toast{font-family:var(--f-mono);font-size:12px;color:var(--adj);min-height:1em}
+@media (max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:62vh auto;height:auto}
+  .stage{order:-1;height:62vh}
+  aside{border-right:0;border-top:1px solid var(--rule);overflow:visible;padding-right:max(16px,env(safe-area-inset-right,0px))}
+}
+</style>
+
+<div class="app">
+  <aside>
+    <div>
+      <h1>Hex Path Tiles</h1>
+      <p class="sub">Hexagons of 55&nbsp;mm radius. Each curve joins two edge midpoints and leaves both edges at 90°, so paths run on smoothly into the next tile.</p>
+    </div>
+
+    <div>
+      <p class="lbl">Set</p>
+      <div class="seg" role="group" aria-label="Tile set" id="sets"></div>
+      <p class="sub" id="setNote"></p>
+    </div>
+
+    <div id="filterBox">
+      <p class="lbl">Number of lines</p>
+      <div class="chips" id="chips" role="group" aria-label="Filter by number of lines"></div>
+    </div>
+
+    <div>
+      <p class="lbl">Edge numbering &amp; curve types</p>
+      <div class="legend">
+        <svg width="96" height="90" viewBox="-60 -56 120 112" aria-label="Hexagon with edges numbered 1 to 6">
+          <polygon id="lgHex" fill="none" stroke="var(--tile-edge)" stroke-width="2"></polygon>
+          <g id="lgNums" font-family="JetBrains Mono, monospace" font-size="13" font-weight="600" fill="var(--ink)" text-anchor="middle" dominant-baseline="central"></g>
+        </svg>
+        <div class="types" id="types"></div>
+      </div>
+    </div>
+
+    <div>
+      <p class="lbl">Gap between tiles <span class="val" id="gapVal"></span></p>
+      <input type="range" id="gap" min="0" max="30" step="1" value="8">
+    </div>
+
+    <div>
+      <p class="lbl">View</p>
+      <div class="row">
+        <button class="btn" id="v3d">Perspective</button>
+        <button class="btn" id="vTop">Top</button>
+        <label class="row" style="gap:6px"><input type="checkbox" id="showTags" checked> Labels</label>
+      </div>
+    </div>
+
+    <div>
+      <p class="lbl">Export shown tiles (mm, Z up)</p>
+      <div class="row">
+        <button class="btn" id="cDxf">Copy DXF</button>
+        <button class="btn" id="cObj">Copy OBJ</button>
+      </div>
+      <p class="toast" id="toast" aria-live="polite"></p>
+      <textarea id="copyout" hidden readonly aria-label="Export text"></textarea>
+    </div>
+
+    <p class="spec">
+      Circumradius <span>55.00</span> mm<br>
+      Edge length <span>55.00</span> mm<br>
+      Apothem <span id="sApo"></span> mm<br>
+      Across flats <span id="sFlats"></span> mm<br>
+      Slab thickness <span>3.00</span> mm
+    </p>
+  </aside>
+
+  <div class="stage" id="stage">
+    <div id="labels"></div>
+    <div id="tip" hidden></div>
+    <div class="hint">drag to orbit · scroll to zoom · right-drag to pan · hover a tile for details</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// ---------- geometry (mm, flat-top hexagon, edge n spans vertices n-1..n, numbered CCW from upper-right) ----------
+const R = 55, A = R * Math.sqrt(3) / 2, THICK = 3, TUBE = 1.6;
+const rad = d => d * Math.PI / 180;
+const mid = k => [A * Math.cos(rad(30 + 60 * k)), A * Math.sin(rad(30 + 60 * k))];
+const edgeDir = k => [Math.cos(rad(120 + 60 * k)), Math.sin(rad(120 + 60 * k))];
+const kindOf = (i, j) => Math.min(Math.abs(i - j), 6 - Math.abs(i - j)); // 1 adjacent, 2 skip-one, 3 opposite
+const KINDS = {1: {key: 'adj', name: 'Adjacent edges'}, 2: {key: 'skip', name: 'Skip one edge'}, 3: {key: 'opp', name: 'Opposite edges'}};
+
+// Circular arc tangent-continuous with both edge normals; centre = intersection of the two edge lines.
+function pathGeom(i, j) {
+  const P = mid(i), Q = mid(j), d1 = edgeDir(i), d2 = edgeDir(j);
+  const den = d1[0] * d2[1] - d1[1] * d2[0];
+  const kind = kindOf(i, j);
+  if (Math.abs(den) < 1e-9) return {kind, line: [P, Q], pts: [P, Q], len: Math.hypot(Q[0] - P[0], Q[1] - P[1])};
+  const t = ((Q[0] - P[0]) * d2[1] - (Q[1] - P[1]) * d2[0]) / den;
+  const C = [P[0] + t * d1[0], P[1] + t * d1[1]];
+  const r = Math.hypot(P[0] - C[0], P[1] - C[1]);
+  const a1 = Math.atan2(P[1] - C[1], P[0] - C[0]);
+  let s = Math.atan2(Q[1] - C[1], Q[0] - C[0]) - a1;
+  while (s > Math.PI) s -= 2 * Math.PI;
+  while (s <= -Math.PI) s += 2 * Math.PI;
+  const pts = [];
+  for (let n = 0; n <= 48; n++) { const a = a1 + s * n / 48; pts.push([C[0] + r * Math.cos(a), C[1] + r * Math.sin(a)]); }
+  return {kind, arc: {C, r, a1, s}, pts, len: r * Math.abs(s)};
+}
+
+// ---------- tile sets ----------
+// The 15 possible lines are bits 0..14 of a mask, in order 1-2, 1-3 … 5-6.
+const PAIRS = [];
+for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) PAIRS.push([i, j]);
+const pairIdx = (i, j) => PAIRS.findIndex(p => p[0] === Math.min(i, j) && p[1] === Math.max(i, j));
+const SYMS = [];  // 6 rotations × 2 reflections of the hexagon, as maps on line bits
+for (let r = 0; r < 6; r++) for (const f of [1, -1])
+  SYMS.push(PAIRS.map(([i, j]) => pairIdx(((f * i + r) % 6 + 6) % 6, ((f * j + r) % 6 + 6) % 6)));
+const popcount = m => { let c = 0; while (m) { c += m & 1; m >>= 1; } return c; };
+const maskPairs = m => PAIRS.filter((_, b) => m >> b & 1);
+
+// Every connected set of lines touching exactly k edges, one per rotation/reflection class.
+function connectedSets(k) {
+  const out = [];
+  for (let m = 1; m < 1 << 15; m++) {
+    const ps = maskPairs(m);
+    let verts = 0; ps.forEach(([i, j]) => verts |= 1 << i | 1 << j);
+    if (popcount(verts) !== k) continue;
+    let seen = 1 << ps[0][0], grew = true;
+    while (grew) { grew = false; ps.forEach(([i, j]) => { const e = 1 << i | 1 << j;
+      if ((seen & e) && (seen & e) !== e) { seen |= e; grew = true; } }); }
+    if (seen !== verts) continue;
+    let canon = m;
+    for (const s of SYMS) { let mm = 0; for (let b = 0; b < 15; b++) if (m >> b & 1) mm |= 1 << s[b]; if (mm < canon) { canon = mm; break; } }
+    if (canon === m) out.push(m);
+  }
+  out.sort((a, b) => popcount(a) - popcount(b) || a - b);
+  return out.map((m, n) => ({id: n + 1, pairs: maskPairs(m)}));
+}
+function matchings(items) {
+  if (!items.length) return [[]];
+  const [a, ...rest] = items, out = [];
+  rest.forEach((b, idx) => matchings(rest.filter((_, k) => k !== idx)).forEach(m => out.push([[a, b], ...m])));
+  return out;
+}
+const SETS = [
+  {key: 'single', name: '1 path', note: 'Every pair of edges joined once: C(6,2) = 15 tiles, all orientations.', make: () => PAIRS.map((p, n) => ({id: n + 1, pairs: [p]}))},
+  {key: 'triple', name: '3 paths', note: 'Every way to pair all six edges into three separate paths: 5 × 3 × 1 = 15 tiles, all orientations.', make: () => matchings([0,1,2,3,4,5]).map((p, n) => ({id: n + 1, pairs: p}))},
+  ...[3, 4, 5, 6].map(k => ({key: 'e' + k, name: k + ' edges', k,
+    note: `Every way to join ${k === 6 ? 'all six' : k} edge midpoints so they are all connected, from ${k - 1} lines up to ${k * (k - 1) / 2}. Rotated or mirrored copies count once.`,
+    make: () => connectedSets(k)}))
+];
+SETS.forEach(s => s.tiles = s.make());
+
+let set = SETS[0], filter = 'all', gap = 8;
+const shown = () => filter === 'all' ? set.tiles : set.tiles.filter(t => t.pairs.length === filter);
+const pairText = pairs => pairs.map(([i, j]) => `${i + 1}–${j + 1}`).join(' ');
+const tileName = t => set.k ? `${set.k}E-${String(t.id).padStart(4, '0')}` : `#${t.id}`;
+const tagText = t => t.pairs.length <= 3 ? pairText(t.pairs) : tileName(t);
+
+// Flat-top offset-column grid, wide enough to read as a sheet
+function centres(count, g) {
+  const cols = count <= 15 ? 5 : Math.ceil(Math.sqrt(count * 1.6));
+  const D = 2 * A + g, out = [];
+  for (let n = 0; n < count; n++) {
+    const q = n % cols, r = Math.floor(n / cols);
+    out.push([q * D * Math.sqrt(3) / 2, -(r * D + (q % 2) * D / 2)]);
+  }
+  const xs = out.map(p => p[0]), ys = out.map(p => p[1]);
+  const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cy = (Math.min(...ys) + Math.max(...ys)) / 2;
+  return out.map(([x, y]) => [x - cx, y - cy]);
+}
+
+// ---------- sidebar ----------
+document.getElementById('lgHex').setAttribute('points',
+  [0,1,2,3,4,5].map(k => `${R*Math.cos(rad(60*k))*0.9},${-R*Math.sin(rad(60*k))*0.9}`).join(' '));
+document.getElementById('lgNums').innerHTML = [0,1,2,3,4,5].map(k => {
+  const [x, y] = mid(k); return `<text x="${x*0.68}" y="${-y*0.68}">${k+1}</text>`; }).join('');
+document.getElementById('types').innerHTML = [1,2,3].map(k => {
+  const g = pathGeom(0, k), geo = g.arc ? `arc r ${g.arc.r.toFixed(2)} · ${Math.abs(g.arc.s*180/Math.PI).toFixed(0)}°` : 'straight';
+  return `<div class="type"><i class="sw" style="background:var(--${KINDS[k].key})"></i><div><b>${KINDS[k].name}</b>
+    <span class="val">${geo} · L ${g.len.toFixed(2)}</span></div></div>`; }).join('');
+document.getElementById('sApo').textContent = A.toFixed(2);
+document.getElementById('sFlats').textContent = (2 * A).toFixed(2);
+
+const setsEl = document.getElementById('sets');
+setsEl.innerHTML = SETS.map(s => `<button id="set-${s.key}" data-key="${s.key}">${s.name}<small>${s.tiles.length.toLocaleString()} tiles</small></button>`).join('');
+setsEl.onclick = e => { const b = e.target.closest('button'); if (b) { set = SETS.find(s => s.key === b.dataset.key); filter = 'all'; refreshUI(); build(true); } };
+const chipsEl = document.getElementById('chips');
+chipsEl.onclick = e => { const b = e.target.closest('button'); if (b) { filter = b.dataset.n === 'all' ? 'all' : +b.dataset.n; refreshUI(); build(true); } };
+function refreshUI() {
+  setsEl.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.key === set.key));
+  const counts = {}; set.tiles.forEach(t => counts[t.pairs.length] = (counts[t.pairs.length] || 0) + 1);
+  const keys = Object.keys(counts).map(Number).sort((a, b) => a - b);
+  document.getElementById('filterBox').hidden = keys.length < 2;
+  chipsEl.innerHTML = `<button class="chip" data-n="all" aria-pressed="${filter === 'all'}">All <small>${set.tiles.length}</small></button>` +
+    keys.map(n => `<button class="chip" data-n="${n}" aria-pressed="${filter === n}">${n} <small>${counts[n]}</small></button>`).join('');
+  document.getElementById('setNote').textContent = set.note;
+}
+
+// ---------- three.js scene ----------
+const stage = document.getElementById('stage'), labelsEl = document.getElementById('labels'), tip = document.getElementById('tip');
+const renderer = new THREE.WebGLRenderer({antialias: true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+stage.prepend(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, 1, 1, 5000);
+camera.up.set(0, 0, 1);
+const controls = new THREE.OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 0.75));
+const sun = new THREE.DirectionalLight(0xffffff, 0.65); sun.position.set(-300, -400, 700); scene.add(sun);
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const mats = {
+  tile: new THREE.MeshStandardMaterial({roughness: 0.9}),
+  edge: new THREE.LineBasicMaterial(),
+  dot: new THREE.MeshStandardMaterial({roughness: 0.6}),
+  adj: new THREE.MeshStandardMaterial({roughness: 0.45}),
+  skip: new THREE.MeshStandardMaterial({roughness: 0.45}),
+  opp: new THREE.MeshStandardMaterial({roughness: 0.45}),
+};
+function applyTheme() {
+  scene.background = new THREE.Color(css('--stage'));
+  mats.tile.color.set(css('--tile')); mats.edge.color.set(css('--tile-edge')); mats.dot.color.set(css('--tile-edge'));
+  ['adj', 'skip', 'opp'].forEach(k => mats[k].color.set(css('--' + k)));
+}
+
+const hexShape = new THREE.Shape([0,1,2,3,4,5].map(k => new THREE.Vector2(R * Math.cos(rad(60*k)), R * Math.sin(rad(60*k)))));
+const hexGeo = new THREE.ExtrudeGeometry(hexShape, {depth: THICK, bevelEnabled: false});
+const dotGeo = new THREE.SphereGeometry(1.4, 10, 6);
+const tubeCache = {};
+function tubeGeo(b, lite) {  // lighter tubes for the big sets keep thousands of tiles smooth
+  const key = b + (lite ? 'l' : 'h');
+  if (!tubeCache[key]) {
+    const g = pathGeom(...PAIRS[b]), z = THICK + TUBE * 0.6;
+    const v = g.pts.map(([x, y]) => new THREE.Vector3(x, y, z));
+    const curve = g.line ? new THREE.LineCurve3(v[0], v[1]) : new THREE.CatmullRomCurve3(v);
+    tubeCache[key] = new THREE.TubeGeometry(curve, g.line ? 1 : lite ? 14 : 48, TUBE, lite ? 5 : 12, false);
+  }
+  return tubeCache[key];
+}
+
+let group = null, hexInst = null, tags = [], list = [], cs = [];
+const m4 = new THREE.Matrix4();
+function build(refit) {
+  if (group) { scene.remove(group); group.traverse(o => { if (o.isInstancedMesh) o.dispose(); if (o.isLineSegments) o.geometry.dispose(); }); }
+  group = new THREE.Group(); labelsEl.innerHTML = ''; tags = []; tip.hidden = true;
+  list = shown(); cs = centres(list.length, gap);
+  const n = list.length, lite = n > 120;
+
+  hexInst = new THREE.InstancedMesh(hexGeo, mats.tile, n);
+  const dots = new THREE.InstancedMesh(dotGeo, mats.dot, n * 6);
+  const outline = [], perLine = PAIRS.map(() => []);
+  list.forEach((t, k) => {
+    const [cx, cy] = cs[k];
+    hexInst.setMatrixAt(k, m4.makeTranslation(cx, cy, 0));
+    for (let e = 0; e < 6; e++) {
+      const [x, y] = mid(e); dots.setMatrixAt(k * 6 + e, m4.makeTranslation(cx + x, cy + y, THICK));
+      const a = rad(60 * e), b = rad(60 * (e + 1));
+      outline.push(cx + R*Math.cos(a), cy + R*Math.sin(a), THICK + .02, cx + R*Math.cos(b), cy + R*Math.sin(b), THICK + .02);
+    }
+    t.pairs.forEach(([i, j]) => perLine[pairIdx(i, j)].push(k));
+  });
+  group.add(hexInst, dots);
+  const og = new THREE.BufferGeometry(); og.setAttribute('position', new THREE.Float32BufferAttribute(outline, 3));
+  group.add(new THREE.LineSegments(og, mats.edge));
+  perLine.forEach((tilesIdx, b) => {
+    if (!tilesIdx.length) return;
+    const im = new THREE.InstancedMesh(tubeGeo(b, lite), mats[KINDS[kindOf(...PAIRS[b])].key], tilesIdx.length);
+    tilesIdx.forEach((k, q) => im.setMatrixAt(q, m4.makeTranslation(cs[k][0], cs[k][1], 0)));
+    group.add(im);
+  });
+  scene.add(group);
+
+  const useTags = n <= 20;
+  document.getElementById('showTags').disabled = !useTags;
+  if (useTags) list.forEach((t, k) => {
+    const el = document.createElement('div'); el.className = 'tag'; el.textContent = tagText(t);
+    labelsEl.appendChild(el); tags.push({el, pos: new THREE.Vector3(cs[k][0], cs[k][1] - A - 9, 0)});
+  });
+  if (refit) setView(false);
+}
+
+let extent = 500;
+function setView(top) {
+  const xs = cs.map(p => p[0]), ys = cs.map(p => p[1]);
+  const w = Math.max(...xs) - Math.min(...xs) + 2 * R, h = Math.max(...ys) - Math.min(...ys) + 2 * A + 24;
+  const fit = Math.tan(rad(17.5)) * 2;
+  extent = Math.max(h, w / camera.aspect) / fit * (top ? 1.08 : 1.2);
+  camera.far = extent * 6; camera.updateProjectionMatrix();
+  controls.maxDistance = extent * 3;
+  controls.target.set(0, 0, 0);
+  if (top) camera.position.set(0, -0.001, extent); else camera.position.set(0, -extent * 0.72, extent * 0.68);
+  controls.update();
+}
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+
+// hover readout
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+let hoverEvt = null;
+renderer.domElement.addEventListener('pointermove', e => hoverEvt = e);
+renderer.domElement.addEventListener('pointerleave', () => { hoverEvt = null; tip.hidden = true; });
+function updateTip() {
+  if (!hoverEvt || !hexInst) return;
+  const rect = renderer.domElement.getBoundingClientRect(), e = hoverEvt; hoverEvt = null;
+  ndc.set((e.clientX - rect.left) / rect.width * 2 - 1, -(e.clientY - rect.top) / rect.height * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObject(hexInst)[0];
+  if (!hit) { tip.hidden = true; return; }
+  const t = list[hit.instanceId];
+  tip.innerHTML = `<b>${tileName(t)}</b> · ${t.pairs.length} line${t.pairs.length > 1 ? 's' : ''}<br>${pairText(t.pairs)}`;
+  tip.hidden = false;
+  const x = e.clientX - rect.left + 14, y = e.clientY - rect.top + 14;
+  tip.style.left = Math.min(x, rect.width - tip.offsetWidth - 8) + 'px';
+  tip.style.top = Math.min(y, rect.height - tip.offsetHeight - 8) + 'px';
+}
+
+const v = new THREE.Vector3();
+function loop() {
+  controls.update();
+  renderer.render(scene, camera);
+  updateTip();
+  if (labelsEl.style.display !== 'none' && tags.length) {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    tags.forEach(({el, pos}) => { v.copy(pos).project(camera);
+      el.style.left = (v.x + 1) / 2 * w + 'px'; el.style.top = (1 - v.y) / 2 * h + 'px'; });
+  }
+  requestAnimationFrame(loop);
+}
+
+// ---------- export ----------
+function exportDXF() {
+  const out = ['0','SECTION','2','ENTITIES'];
+  const ent = (...kv) => out.push(...kv.map(String));
+  const f = x => x.toFixed(4);
+  list.forEach((t, n) => {
+    const [cx, cy] = cs[n];
+    for (let k = 0; k < 6; k++) {
+      const a = rad(60*k), b = rad(60*(k+1));
+      ent('0','LINE','8','HEX','10',f(cx+R*Math.cos(a)),'20',f(cy+R*Math.sin(a)),'30','0','11',f(cx+R*Math.cos(b)),'21',f(cy+R*Math.sin(b)),'31','0');
+    }
+    t.pairs.forEach(([i, j]) => {
+      const g = pathGeom(i, j), layer = 'PATH_' + KINDS[g.kind].key.toUpperCase();
+      if (g.line) ent('0','LINE','8',layer,'10',f(cx+g.line[0][0]),'20',f(cy+g.line[0][1]),'30','0','11',f(cx+g.line[1][0]),'21',f(cy+g.line[1][1]),'31','0');
+      else {
+        const {C, r, a1, s} = g.arc, d = x => ((x * 180 / Math.PI) % 360 + 360) % 360;
+        const st = s > 0 ? a1 : a1 + s, en = s > 0 ? a1 + s : a1;
+        ent('0','ARC','8',layer,'10',f(cx+C[0]),'20',f(cy+C[1]),'30','0','40',f(r),'50',f(d(st)),'51',f(d(en)));
+      }
+    });
+    ent('0','TEXT','8','LABEL','10',f(cx),'20',f(cy-A-10),'30','0','40','5','1',tagText(t).replace(/–/g,'-'),'72','1','11',f(cx),'21',f(cy-A-10),'31','0');
+  });
+  out.push('0','ENDSEC','0','EOF');
+  return out.join('\n');
+}
+function exportOBJ() {
+  const lines = ['# Hex path tiles, R=55mm, units mm, Z up', ''];
+  let vi = 0;
+  list.forEach((t, n) => {
+    const [cx, cy] = cs[n];
+    lines.push(`o ${tileName(t).replace('#', 'tile_')}_${t.pairs.map(([i, j]) => `${i+1}${j+1}`).join('_')}`);
+    for (let k = 0; k < 6; k++) lines.push(`v ${(cx+R*Math.cos(rad(60*k))).toFixed(4)} ${(cy+R*Math.sin(rad(60*k))).toFixed(4)} 0`);
+    lines.push('l ' + [1,2,3,4,5,6,1].map(k => vi + k).join(' ')); vi += 6;
+    t.pairs.forEach(([i, j]) => {
+      const g = pathGeom(i, j);
+      g.pts.forEach(([x, y]) => lines.push(`v ${(cx+x).toFixed(4)} ${(cy+y).toFixed(4)} 0`));
+      lines.push('l ' + g.pts.map((_, k) => vi + k + 1).join(' ')); vi += g.pts.length;
+    });
+  });
+  return lines.join('\n');
+}
+async function copyText(txt, what) {
+  const toast = document.getElementById('toast'), ta = document.getElementById('copyout');
+  const size = `${list.length} tiles, ${(txt.length / 1024).toFixed(0)} KB`;
+  try { await navigator.clipboard.writeText(txt); ta.hidden = true; toast.textContent = `${what} copied (${size}). Paste into a text file to save it.`; }
+  catch { ta.hidden = false; ta.value = txt; ta.focus(); ta.select(); toast.textContent = `Clipboard blocked. ${what} text (${size}) is selected below; press Ctrl+C.`; }
+}
+
+// ---------- wiring ----------
+const gapIn = document.getElementById('gap'), gapVal = document.getElementById('gapVal');
+gapIn.oninput = () => { gap = +gapIn.value; gapVal.textContent = gap + ' mm'; build(false); };
+gapVal.textContent = gap + ' mm';
+document.getElementById('v3d').onclick = () => setView(false);
+document.getElementById('vTop').onclick = () => setView(true);
+document.getElementById('showTags').onchange = e => labelsEl.style.display = e.target.checked ? '' : 'none';
+document.getElementById('cDxf').onclick = () => copyText(exportDXF(), 'DXF');
+document.getElementById('cObj').onclick = () => copyText(exportOBJ(), 'OBJ');
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+new MutationObserver(applyTheme).observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
+
+applyTheme(); refreshUI(); resize(); build(true); loop();
+</script>
