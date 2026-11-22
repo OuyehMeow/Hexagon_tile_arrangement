@@ -5,24 +5,23 @@ on a board and exports cut-ready, 1:1 mm drawings.
 
 | File | What it does |
 |---|---|
-| `hex-path-composer.html` | The composer: layout → linetype → line parameters → output. Opens in any browser. |
-| `serve_composer.py` | Local helper that serves the composer and saves each export into its own folder. |
+| `hex-path-composer.html` | The composer: layout → linetype → line parameters → output. |
 | `hex-path-tiles.html` | 3D viewer of every tile combination (1 path, 3 paths, 3–6 edges). |
 | `make_hex_tiles.py` | Writes those tile sets as DXF (true arcs), OBJ and CSV. |
 
-No dependencies beyond Python 3.9+ and a browser (the viewer loads three.js from a CDN).
+No install and no server: open the HTML files in Chrome or Edge. Fonts and three.js load from CDNs.
 
-## Run
+## Use
+
+Double-click `hex-path-composer.html`. In **Output**, Export SVG asks once for a folder (the browser
+remembers it; **Choose folder** changes it). Each press then creates
+`<folder>/<date>_<cols>x<rows>_seed<seed>/` (`_2`, `_3` … when the name is taken) with `hex_paths.svg`,
+`layout.svg` and `config.json`; Save all adds `tiles.csv` and `hex_tiles.dxf`. Browsers without folder
+access (Firefox, Safari) download the same files with the folder name as a prefix.
 
 ```bash
-python serve_composer.py --exports ../exports
-python make_hex_tiles.py ../exports/tile_sets
+python make_hex_tiles.py <output folder>   # tile sets; default ./exports/tile_sets (git-ignored)
 ```
-
-`serve_composer.py` opens the composer. Each Export SVG creates `<exports>/<date>_<cols>x<rows>_seed<seed>/`
-(`_2`, `_3` … when the name is taken) with `hex_paths.svg`, `layout.svg` and `config.json`; Save all adds
-`tiles.csv` and `hex_tiles.dxf`. Without `--exports` (or `HEX_EXPORTS`) output goes to `./exports`, which
-is git-ignored. Opened straight from disk, the composer copies files to the clipboard instead.
 
 ## Method
 

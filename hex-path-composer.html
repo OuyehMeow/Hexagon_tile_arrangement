@@ -177,9 +177,12 @@ select{font:inherit;padding:6px 8px;border:1px solid var(--rule);border-radius:6
       <p class="lbl"><b>4</b>Output · 1:1 mm</p>
       <div class="row">
         <button class="btn primary" id="exportSvg">Export SVG</button>
-        <button class="btn" id="saveFolder" hidden>Save all</button>
+        <button class="btn" id="saveAll">Save all</button>
         <button class="btn" id="cDxf">Copy DXF</button>
         <button class="btn" id="cCsv">Copy CSV</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="pickFolder">Choose folder</button>
       </div>
       <p class="toast" id="toast" aria-live="polite"></p>
       <textarea id="copyout" hidden readonly aria-label="Export text"></textarea>
@@ -659,20 +662,61 @@ function exportConfig() {
     .replace(/\{\s+("col"[^{}]*?)\s+\}/g, (_, body) => '{' + body.replace(/\s*\n\s*/g, ' ') + '}');
 }
 
-// Saving works when the page is served by serve_composer.py on this computer. Every press creates a new
-// subfolder (the helper adds _2, _3 … when the date_gridsize_seed name is already taken).
-const HELPER = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
-async function saveFolder(svgOnly) {
+// Saving: the page writes straight into a folder on this computer (File System Access API, Chrome and Edge).
+// The folder is chosen once and remembered in IndexedDB; every press creates a new date_gridsize_seed
+// subfolder (_2, _3 … when the name is taken). Browsers without the API download the files instead.
+let exportDir = null;
+const idb = (mode, fn) => new Promise((ok, fail) => {
+  const open = indexedDB.open('hexComposer', 1);
+  open.onupgradeneeded = () => open.result.createObjectStore('kv');
+  open.onerror = () => fail(open.error);
+  open.onsuccess = () => { try { const tx = open.result.transaction('kv', mode), req = fn(tx.objectStore('kv'));
+    tx.oncomplete = () => ok(req.result); tx.onerror = () => fail(tx.error); } catch (e) { fail(e); } };
+});
+const loadFolder = async () => { try { exportDir = await idb('readonly', s => s.get('exportDir')) || null; } catch {} };
+const showFolder = () => document.getElementById('pickFolder').textContent = exportDir ? `Folder: ${exportDir.name}` : 'Choose folder';
+async function pickFolder() {
+  exportDir = await showDirectoryPicker({id: 'hex-exports', mode: 'readwrite'});
+  try { await idb('readwrite', s => s.put(exportDir, 'exportDir')); } catch {}
+  showFolder();
+}
+async function writeFolder(files) {
+  if (!exportDir) await pickFolder();
+  if (await exportDir.queryPermission({mode: 'readwrite'}) !== 'granted' &&
+      await exportDir.requestPermission({mode: 'readwrite'}) !== 'granted') throw new Error('no permission to write to that folder');
+  for (let n = 1; ; n++) {
+    const name = n === 1 ? folderName() : `${folderName()}_${n}`;
+    try { await exportDir.getDirectoryHandle(name); continue; } catch (e) { if (e.name !== 'NotFoundError') throw e; }
+    const sub = await exportDir.getDirectoryHandle(name, {create: true});
+    for (const [file, text] of Object.entries(files)) {
+      const w = await (await sub.getFileHandle(file, {create: true})).createWritable();
+      await w.write(text); await w.close();
+    }
+    return `${exportDir.name}/${name}/`;
+  }
+}
+function downloadFiles(files) {
+  for (const [file, text] of Object.entries(files)) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], {type: file.endsWith('.svg') ? 'image/svg+xml' : 'text/plain'}));
+    a.download = `${folderName()}_${file}`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+}
+async function saveExport(all) {
   const toast = document.getElementById('toast'), svgText = exportSVG();
-  if (!svgText) { toast.textContent = 'Press Assign tiles first; there are no paths to save yet.'; return; }
+  if (!svgText) { toast.textContent = 'Assign tiles first; there are no paths to save yet.'; return; }
   const files = {'hex_paths.svg': svgText, 'layout.svg': exportLayoutSVG(), 'config.json': exportConfig()};
-  if (!svgOnly) Object.assign(files, {'tiles.csv': exportCSV(), 'hex_tiles.dxf': exportDXF()});
-  try {
-    const r = await fetch('/save', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({folder: folderName(), files})});
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || r.statusText);
-    toast.textContent = `Created ${j.path} with ${Object.keys(files).join(', ')}`;
-  } catch (e) { toast.textContent = `Couldn't save: ${e.message}. Check that serve_composer.py is still running.`; }
+  if (all) Object.assign(files, {'tiles.csv': exportCSV(), 'hex_tiles.dxf': exportDXF()});
+  if (window.showDirectoryPicker) {
+    try { toast.textContent = `Saved ${await writeFolder(files)}`; return; }
+    catch (e) {
+      if (e.name === 'AbortError') { toast.textContent = 'No folder chosen, nothing saved.'; return; }
+      if (e.name !== 'SecurityError') { toast.textContent = `Couldn't save: ${e.message}`; return; }
+    }   // a SecurityError means this page may not open folders (e.g. embedded); download instead
+  }
+  if (window.top !== window) { copyText(svgText, 'SVG'); return; }   // embedded pages can't download either
+  downloadFiles(files);
+  toast.textContent = `Downloaded ${Object.keys(files).length} files named ${folderName()}_…`;
 }
 function exportDXF() {
   const out = ['0','SECTION','2','ENTITIES'], f = x => x.toFixed(4), ent = (...kv) => out.push(...kv.map(String));
@@ -800,9 +844,11 @@ document.getElementById('applySize').onclick = () => {
 document.getElementById('showNums').onchange = render;
 document.getElementById('density').onchange = () => { if (result && !stale) assign(seed); };
 document.getElementById('openEnds').onchange = () => { if (result && !stale) assign(seed); };
-document.getElementById('saveFolder').hidden = !HELPER;
-document.getElementById('saveFolder').onclick = () => saveFolder(false);
-document.getElementById('exportSvg').onclick = () => HELPER ? saveFolder(true) : copyText(exportSVG(), 'SVG');
+document.getElementById('exportSvg').onclick = () => saveExport(false);
+document.getElementById('saveAll').onclick = () => saveExport(true);
+document.getElementById('pickFolder').onclick = () => pickFolder().catch(e => {
+  if (e.name !== 'AbortError') document.getElementById('toast').textContent = `Couldn't open a folder here: ${e.message}`; });
+loadFolder().then(showFolder);
 document.getElementById('cDxf').onclick = () => copyText(exportDXF(), 'DXF');
 document.getElementById('cCsv').onclick = () => copyText(exportCSV(), 'CSV');
 
