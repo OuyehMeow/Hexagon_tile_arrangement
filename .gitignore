@@ -1,3 +1,14 @@
+# Runtime data, exports, and local secrets (Method in the Cloud, Data at Local)
+data/
+datasets/
 exports/
+output/
+cache/
+state/
+.env
+*.local.*
+
+# Python caches
 __pycache__/
 *.pyc
+*.pyo

@@ -14,6 +14,7 @@ Outputs:
 
 Usage: python make_hex_tiles.py [output folder]   (default: ./exports/tile_sets beside this script)
 """
+import json
 import math
 import os
 import sys
@@ -21,7 +22,26 @@ import sys
 R = 55.0
 GAP = 8.0
 A = R * math.sqrt(3) / 2
-OUT = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "exports", "tile_sets")
+
+
+def default_out():
+    if len(sys.argv) > 1:
+        return os.path.abspath(sys.argv[1])
+    data_dir = os.environ.get("HEX_DATA_DIR", "").strip()
+    if not data_dir:
+        cfg_path = os.path.expanduser("~/.config/hex-path-tiles/config.json")
+        if os.path.isfile(cfg_path):
+            try:
+                with open(cfg_path, encoding="utf-8") as fh:
+                    data_dir = json.load(fh).get("data_dir", "").strip()
+            except (OSError, ValueError):
+                pass
+    if data_dir:
+        return os.path.join(os.path.abspath(os.path.expanduser(data_dir)), "exports", "tile_sets")
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "exports", "tile_sets")
+
+
+OUT = default_out()
 KIND = {1: "PATH_ADJ", 2: "PATH_SKIP", 3: "PATH_OPP"}
 COLOR = {"HEX": 8, "PATH_ADJ": 4, "PATH_SKIP": 30, "PATH_OPP": 5, "LABEL": 7}
 

@@ -1,0 +1,11 @@
+services:
+  hex-path-composer:
+    build: .
+    container_name: hex-path-composer
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8765}:8765"
+    volumes:
+      - "${HEX_DATA_DIR:-./data}:/data"
+    environment:
+      - TZ=America/Los_Angeles

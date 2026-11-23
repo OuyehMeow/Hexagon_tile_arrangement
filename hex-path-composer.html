@@ -670,18 +670,25 @@ function exportConfig() {
 // without the API, the same folder is saved as one .zip instead.
 const EMBEDDED = (() => { try { return window.top !== window; } catch { return true; } })();
 const downloadsCap = window.claude && window.claude.use ? window.claude.use('downloads') : Promise.resolve(null);
-let exportDir = null;
+let exportDir = null, serverMode = false;
+const detectServer = async () => {
+  if (!location.protocol.startsWith('http')) return false;
+  try { const r = await fetch('/api/status', {cache: 'no-store'}); const j = r.ok ? await r.json() : null;
+    serverMode = !!(j && j.ok && j.mode === 'server'); } catch { serverMode = false; }
+  if (serverMode) document.getElementById('pickFolder').hidden = true;
+  return serverMode;
+};
 // Minimal ZIP writer (stored, no compression): a whole export folder as one file
 const CRC_TABLE = Array.from({length: 256}, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
 const crc32 = b => { let c = ~0; for (let i = 0; i < b.length; i++) c = CRC_TABLE[(c ^ b[i]) & 255] ^ (c >>> 8); return ~c >>> 0; };
-function zipFolder(dir, files) {
+function zipFolder(files) {
   const enc = new TextEncoder(), d = new Date(), out = [], central = [];
   const time = d.getHours() << 11 | d.getMinutes() << 5 | d.getSeconds() >> 1;
   const date = (d.getFullYear() - 1980) << 9 | (d.getMonth() + 1) << 5 | d.getDate();
   let offset = 0;
   const header = (size, fill) => { const b = new Uint8Array(size), v = new DataView(b.buffer); fill(v); return b; };
   for (const [file, text] of Object.entries(files)) {
-    const name = enc.encode(`${dir}/${file}`), data = enc.encode(text), crc = crc32(data);
+    const name = enc.encode(file), data = enc.encode(text), crc = crc32(data);
     const common = (v, at) => { v.setUint16(at, 20, true); v.setUint16(at + 2, 0x0800, true); v.setUint16(at + 4, 0, true);
       v.setUint16(at + 6, time, true); v.setUint16(at + 8, date, true); v.setUint32(at + 10, crc, true);
       v.setUint32(at + 14, data.length, true); v.setUint32(at + 18, data.length, true); v.setUint16(at + 22, name.length, true); };
@@ -728,20 +735,32 @@ async function saveExport(all) {
   if (!svgText) { toast.textContent = 'Assign tiles first; there are no paths to save yet.'; return; }
   const files = {'hex_paths.svg': svgText, 'layout.svg': exportLayoutSVG(), 'config.json': exportConfig()};
   if (all) Object.assign(files, {'tiles.csv': exportCSV(), 'hex_tiles.dxf': exportDXF()});
+  if (serverMode) {
+    toast.textContent = 'Saving to server…';
+    try {
+      const r = await fetch('/api/export', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({folder: folderName(), files})});
+      const j = await r.json();
+      if (!r.ok || !j.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      toast.textContent = `Saved ${j.path} (${j.files.length} files)`; return;
+    } catch (e) { toast.textContent = `Couldn't save to server: ${e.message}`; return; }
+  }
   if (!EMBEDDED && window.showDirectoryPicker) {
     try { toast.textContent = `Saved ${await writeFolder(files)}`; return; }
     catch (e) {
+      if (e.name === 'NotFoundError') { exportDir = null; showFolder(); try { toast.textContent = `Saved ${await writeFolder(files)}`; return; } catch (e2) { e = e2; } }
       if (e.name === 'AbortError') { toast.textContent = 'No folder chosen, nothing saved.'; return; }
       if (e.name !== 'SecurityError') { toast.textContent = `Couldn't save: ${e.message}`; return; }
     }
   }
-  const zip = zipFolder(folderName(), files), filename = `${folderName()}.zip`;
+  const zip = zipFolder(files), filename = `${folderName()}.zip`;
   if (EMBEDDED) {   // the frame can't download by itself; the viewer's save prompt can
     const downloads = await downloadsCap;
-    if (!downloads) { copyText(svgText, 'SVG'); return; }
-    try { await downloads.save({filename, data: zip}); toast.textContent = `Saved ${filename}`; }
-    catch (e) { toast.textContent = e.code === 'declined' ? 'Save declined, nothing saved.' : `Couldn't save: ${e.message}`; }
-    return;
+    if (downloads) {
+      try { await downloads.save({filename, data: zip}); toast.textContent = `Saved ${filename}`; }
+      catch (e) { toast.textContent = e.code === 'declined' ? 'Save declined, nothing saved.' : `Couldn't save: ${e.message}`; }
+      return;
+    }
   }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(zip); a.download = filename; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
@@ -879,6 +898,7 @@ document.getElementById('pickFolder').onclick = () => pickFolder().catch(e => {
   if (e.name !== 'AbortError') document.getElementById('toast').textContent = `Couldn't open a folder here: ${e.message}`; });
 document.getElementById('pickFolder').hidden = EMBEDDED || !window.showDirectoryPicker;
 if (!EMBEDDED) loadFolder().then(showFolder);
+detectServer();
 document.getElementById('cDxf').onclick = () => copyText(exportDXF(), 'DXF');
 document.getElementById('cCsv').onclick = () => copyText(exportCSV(), 'CSV');
 
