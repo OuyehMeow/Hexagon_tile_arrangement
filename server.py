@@ -25,7 +25,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 USER_CONFIG = Path.home() / ".config" / "hex-path-tiles" / "config.json"
-FOLDER_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{1,2}x\d{1,2}_seed\d{1,7}$")
+FOLDER_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_[A-Za-z0-9_-]{3,64}$")
 ALLOWED_FILES = {"hex_paths.svg", "layout.svg", "config.json", "tiles.csv", "hex_tiles.dxf"}
 MAX_BYTES = 50 * 1024 * 1024
 

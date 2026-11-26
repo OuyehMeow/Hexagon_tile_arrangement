@@ -20,8 +20,13 @@ This project follows **Method in the Cloud, Data at Local**: code lives in GitHu
 ### Option A — Simplest on a PC (no install, no server)
 1. Double-click `hex-path-composer.html` in **Chrome** or **Edge**.
 2. Right-click / right-drag tiles on the board, click **Assign tiles**, and tune your linetype.
-3. Click **Export SVG** (or **Save all**). The first time, pick your `exports/` folder (e.g. `G:\My Drive\...\HEXAGON_TILE_ARRANGEMENT\exports`). The browser remembers it.
-4. Each press creates a new `<date>_<cols>x<rows>_seed<seed>/` subfolder (`_2`, `_3` … if taken) with `hex_paths.svg`, `layout.svg`, and `config.json` (plus `tiles.csv` and `hex_tiles.dxf` for **Save all**).
+3. In **4 Plot & Output**, choose a paper format:
+   - **1:1 mm**: raw tile scale (`R = 55 mm`).
+   - **4×6" Postcard**: portrait (`101.6 × 152.4 mm`), auto-rotated to portrait and scaled to `3.6"` wide (`0.2"` margins).
+   - **12×16" Large**: portrait (`304.8 × 406.4 mm`), auto-rotated to portrait with `1"` L/R/T and `1.5"` bottom margin.
+   - **12×16" ×8 Collage**: 8 postcards arranged in a `2 × 4` grid of rotated `6×4"` slots on a `12×16"` portrait sheet. Add plots one by one (stored in session memory up to 8 slots, click any slot to reload it, optional cut marks in SVG).
+4. Click **Export SVG** (or **Save all**). The first time, pick your `exports/` folder (e.g. `G:\My Drive\...\HEXAGON_TILE_ARRANGEMENT\exports`). The browser remembers it.
+5. Each press creates a new dated subfolder (`_2`, `_3` … if taken) with `hex_paths.svg`, `layout.svg`, and `config.json` (plus `tiles.csv` and `hex_tiles.dxf` for **Save all**).
 
 ### Option B — Local Python server (any browser on your PC or LAN)
 ```bash
