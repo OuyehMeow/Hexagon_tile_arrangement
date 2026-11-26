@@ -1,30 +1,69 @@
 # Hex Path Tiles
 
 Hexagon tiles (flat-top, R = 55 mm) whose paths join edge midpoints, and a composer that arranges them
-on a board and exports cut-ready, 1:1 mm drawings.
+on a board and exports cut-ready, 1:1 mm drawings for a pen plotter.
 
 | File | What it does |
 |---|---|
 | `hex-path-composer.html` | The composer: layout → linetype → line parameters → output. |
 | `hex-path-tiles.html` | 3D viewer of every tile combination (1 path, 3 paths, 3–6 edges). |
 | `make_hex_tiles.py` | Writes those tile sets as DXF (true arcs), OBJ and CSV. |
+| `server.py` | Optional zero-dependency web server for local PC or home NAS hosting. |
+| `Dockerfile` / `docker-compose.yml` | One-command container setup for a home NAS (Synology, TrueNAS, Unraid, Raspberry Pi). |
 
-No install and no server: open the HTML files in Chrome or Edge. Fonts and three.js load from CDNs.
+---
 
-## Use
+## Startup Guide
 
-Double-click `hex-path-composer.html`. In **Output**, Export SVG asks once for a folder (the browser
-remembers it; **Choose folder** changes it). Each press then creates
-`<folder>/<date>_<cols>x<rows>_seed<seed>/` (`_2`, `_3` … when the name is taken) with `hex_paths.svg`,
-`layout.svg` and `config.json`; Save all adds `tiles.csv` and `hex_tiles.dxf`.
+This project follows **Method in the Cloud, Data at Local**: code lives in GitHub, while all exports live outside the repo under a single `HEX_DATA_DIR` folder (your Google Drive folder today, or a NAS share later).
 
-Browsers forbid folder pickers inside a cross-origin frame (the claude.ai artifact viewer, the Claude
-desktop preview), and Firefox and Safari have no folder access. There the same folder is saved as one
-`<date>_<cols>x<rows>_seed<seed>.zip` instead (through the viewer's save prompt when embedded).
+### Option A — Simplest on a PC (no install, no server)
+1. Double-click `hex-path-composer.html` in **Chrome** or **Edge**.
+2. Right-click / right-drag tiles on the board, click **Assign tiles**, and tune your linetype.
+3. In **4 Plot & Output**, choose a paper format:
+   - **1:1 mm**: raw tile scale (`R = 55 mm`).
+   - **4×6" Postcard**: portrait (`101.6 × 152.4 mm`), auto-rotated to portrait and scaled to `3.6"` wide (`0.2"` margins).
+   - **12×16" Large**: portrait (`304.8 × 406.4 mm`), auto-rotated to portrait with `1"` L/R/T and `1.5"` bottom margin.
+   - **12×16" ×8 Collage**: 8 postcards arranged in a `2 × 4` grid of rotated `6×4"` slots on a `12×16"` portrait sheet. Add plots one by one (stored in session memory up to 8 slots, click any slot to reload it, optional cut marks in SVG).
+4. Click **Export SVG** (or **Save all**). The first time, pick your `exports/` folder (e.g. `G:\My Drive\...\HEXAGON_TILE_ARRANGEMENT\exports`). The browser remembers it.
+5. Each press creates a new dated subfolder (`_2`, `_3` … if taken) with `hex_paths.svg`, `layout.svg`, and `config.json` (plus `tiles.csv` and `hex_tiles.dxf` for **Save all**).
 
+### Option B — Local Python server (any browser on your PC or LAN)
 ```bash
-python make_hex_tiles.py <output folder>   # tile sets; default ./exports/tile_sets (git-ignored)
+python3 server.py --data-dir "/path/to/HEXAGON_TILE_ARRANGEMENT"
 ```
+- Open `http://127.0.0.1:8765/` for the composer, or `http://127.0.0.1:8765/tiles` for the 3D tile viewer.
+- Add `--host 0.0.0.0` to open it from another device (e.g. iPad or laptop) on your Wi-Fi.
+- Exports save directly into `<data-dir>/exports/` with no browser folder picker needed.
+
+### Option C — Home NAS (Docker Compose, ready for future move)
+1. Clone this repository onto your NAS:
+   ```bash
+   git clone https://github.com/OuyehMeow/Hexagon_tile_arrangement.git
+   cd Hexagon_tile_arrangement
+   ```
+2. Copy the environment template and set your NAS data folder:
+   ```bash
+   cp .env.example .env
+   # Edit .env and set HEX_DATA_DIR=/path/on/your/nas/HEXAGON_TILE_ARRANGEMENT
+   ```
+3. Start the container:
+   ```bash
+   docker compose up -d
+   ```
+4. Open `http://<your-nas-ip>:8765/` from any browser on your home network (and `/tiles` for the 3D viewer). Every export writes straight into `<HEX_DATA_DIR>/exports/<date>_<cols>x<rows>_seed<seed>/`.
+5. To update later:
+   ```bash
+   git pull && docker compose up -d --build
+   ```
+
+### Generate the full tile catalog (optional)
+```bash
+python3 make_hex_tiles.py                    # writes to <HEX_DATA_DIR>/exports/tile_sets (or ./exports/tile_sets)
+python3 make_hex_tiles.py /custom/tile_sets  # explicit output folder
+```
+
+---
 
 ## Method
 
